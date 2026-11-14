@@ -66,13 +66,43 @@ namespace DitdLauncher
 
         // ───────────── Manifeste ─────────────
 
+        /// <summary>
+        /// Base des téléchargements pour cette vérification. raw.githubusercontent.com garde la branche en cache
+        /// environ 5 minutes : on préfère l'URL du dernier commit (contenu immuable, jamais périmé), obtenue via l'API.
+        /// </summary>
+        private static string _resolvedBase;
+
+        private async Task<string> ResolveDistBaseAsync()
+        {
+            try
+            {
+                using (var req = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{Repo}/commits/{Branch}"))
+                {
+                    req.Headers.Accept.ParseAdd("application/vnd.github.sha");
+                    using (var resp = await Http.SendAsync(req).ConfigureAwait(false))
+                    {
+                        if (resp.IsSuccessStatusCode)
+                        {
+                            var sha = (await resp.Content.ReadAsStringAsync().ConfigureAwait(false)).Trim();
+                            if (sha.Length >= 7 && sha.All(Uri.IsHexDigit))
+                                return $"https://raw.githubusercontent.com/{Repo}/{sha}/dist/";
+                        }
+                    }
+                }
+            }
+            catch { }
+            L("API GitHub indisponible, repli sur la branche (peut avoir quelques minutes de retard).");
+            return DistBase;
+        }
+
         public async Task<Manifest> FetchManifestAsync()
         {
-            var json = await Http.GetStringAsync(DistBase + "manifest.json?t=" + DateTime.UtcNow.Ticks).ConfigureAwait(false);
+            _resolvedBase = await ResolveDistBaseAsync().ConfigureAwait(false);
+            var json = await Http.GetStringAsync(_resolvedBase + "manifest.json").ConfigureAwait(false);
             return Manifest.Parse(json.TrimStart('﻿'));
         }
 
-        private static string Resolve(string url) => url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? url : DistBase + url;
+        private static string Resolve(string url) => url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? url : (_resolvedBase ?? DistBase) + url;
 
         public static string Sha256Of(string file)
         {
