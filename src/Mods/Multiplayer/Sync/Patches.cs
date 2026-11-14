@@ -76,6 +76,9 @@ namespace DiceMultiplayer.Sync
             // 3) Plateau partagé : mes poses et retraits partent aux autres, les cases des autres me sont bloquées
             P(h, typeof(BattleBoard), nameof(BattleBoard.PlaceDiceOnBoard), nameof(PlaceDicePrefix));
             P(h, typeof(ReturnDiceToHand), nameof(ReturnDiceToHand.ExecuteReturnDiceToHand), nameof(ReturnDicePrefix));
+            // Dés des autres posés en vrai dans mes cases : leurs actions ne comptent pas chez moi, et ils ne vont pas dans ma défausse
+            P(h, typeof(BoardSlot), nameof(BoardSlot.GetBattleActions), nameof(GhostActionsPostfix), postfix: true);
+            P(h, typeof(BattleBoard), nameof(BattleBoard.DiscardAllDice), nameof(DiscardAllPrefix));
 
             // 4) Ennemis partagés : mes dégâts sont envoyés aux autres
             P(h, typeof(Enemy), "_Damage", nameof(EnemyDamagePostfix), postfix: true);
@@ -241,9 +244,31 @@ namespace DiceMultiplayer.Sync
             catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("PlaceDicePrefix : " + e.Message); return true; }
         }
 
-        private static void ReturnDicePrefix(GameObjectDice __0)
+        private static bool ReturnDicePrefix(GameObjectDice __0)
         {
-            try { Board.OnLocalRemove(__0); } catch { }
+            try
+            {
+                if (Board.IsGhostDice(__0)) return false;   // dé d'un autre joueur : on ne le reprend pas en main
+                Board.OnLocalRemove(__0);
+            }
+            catch { }
+            return true;
+        }
+
+        private static void GhostActionsPostfix(BoardSlot __instance, ref Il2CppSystem.Collections.Generic.List<BattleSystem.BattleAction> __result)
+        {
+            try
+            {
+                if (Coop.Active && Board.IsGhostSlot(__instance))
+                    __result = new Il2CppSystem.Collections.Generic.List<BattleSystem.BattleAction>();
+            }
+            catch { }
+        }
+
+        private static void DiscardAllPrefix()
+        {
+            try { Board.BeforeDiscardAll(); }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("DiscardAllPrefix : " + e.Message); }
         }
 
         // ───── Ennemis ─────

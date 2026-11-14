@@ -24,15 +24,22 @@ namespace DiceMultiplayer.Sync
     {
         public sealed class Ghost
         {
-            public int PlayerId, Uid, X, Y, Value;
-            public string Name, Vis;
+            public int PlayerId, Uid, X, Y, Value, Face;
+            public string Name, Vis, Data;
             public GameObject Go;
             public bool Failed;
+            // Vrai dé du jeu posé dans la case (copie du dé distant) : participe aux interactions entre dés
+            public GameObjectDice Real;
+            public BoardSlot Slot;
+            public bool RealFailed, Stale;
         }
 
         private static readonly List<Ghost> _ghosts = new List<Ghost>();
         private static Dictionary<string, Sprite> _sprites;
         private const char F = '\u001f';
+        private static int _ghostUid = -100000;
+        private static float _nextFix;
+        public static bool PlacingGhost { get; private set; }
 
         public static void Reset()
         {
@@ -40,7 +47,19 @@ namespace DiceMultiplayer.Sync
             _ghosts.Clear();
         }
 
-        public static bool IsTakenByOther(int x, int y) => _ghosts.Any(g => g.X == x && g.Y == y);
+        public static bool IsTakenByOther(int x, int y) => _ghosts.Any(g => g.X == x && g.Y == y && !g.Stale);
+
+        public static bool IsGhostSlot(BoardSlot s) => s != null && _ghosts.Any(g => g.Real != null && g.Slot != null && g.Slot.Pointer == s.Pointer);
+        public static bool IsGhostDice(GameObjectDice d) => d != null && _ghosts.Any(g => g.Real != null && g.Real.Pointer == d.Pointer);
+
+        private static bool Planning
+        {
+            get
+            {
+                var st = Game.TurnState;
+                return st == BattleSystem.TurnState.SelectDice || st == BattleSystem.TurnState.UseRunestones;
+            }
+        }
 
         // ───────────── Local → réseau ─────────────
 
@@ -49,11 +68,11 @@ namespace DiceMultiplayer.Sync
         {
             if (!Coop.Active || slot == null || dice == null) return true;
             var c = slot.CurrentCoord;
-            var taken = _ghosts.FirstOrDefault(g => g.X == c.x && g.Y == c.y);
+            var taken = _ghosts.FirstOrDefault(g => g.X == c.x && g.Y == c.y && !g.Stale);
             if (taken != null) { Coop.Toast($"Case déjà prise par {Coop.NameOf(taken.PlayerId)}"); return false; }
             var ad = Game.Safe(() => dice.CurrentActiveDice);
             if (ad == null) return true;
-            // Instantané pris APRÈS la pose : le dé a alors son apparence de plateau (en main, il n'a pas le même rendu)
+            // Envoyé APRÈS la pose : le dé a alors son apparence de plateau (en main, il n'a pas le même rendu)
             int key = Key(dice), x = c.x, y = c.y;
             Game.Schedule(() =>
             {
@@ -62,6 +81,8 @@ namespace DiceMultiplayer.Sync
                 {
                     t = T.BoardPlace, uid = key, sx = x, sy = y,
                     text = Game.Safe(() => ad.diceDataName) ?? "?", btn = Game.Safe(() => ad.CurrentFaceValue),
+                    path = Game.Safe(() => ad.ToCompressedStringForRunHistory()),
+                    h = Game.Safe(() => ad.faces.CurrentFaceIndex),
                     vis = Game.Safe(() => Snapshot(dice)),
                 });
             }, 0.35f);
@@ -78,6 +99,18 @@ namespace DiceMultiplayer.Sync
         {
             if (!Coop.Active) return;
             Coop.Send(new Msg { t = T.BoardClear });
+        }
+
+        /// <summary>
+        /// Préfixe de BattleBoard.DiscardAllDice (fin de tour, après l'exécution) : on retire les copies des dés des autres
+        /// AVANT, sinon elles finiraient dans ma défausse.
+        /// </summary>
+        public static void BeforeDiscardAll()
+        {
+            if (!Coop.Active) return;
+            foreach (var g in _ghosts) RemoveReal(g);
+            foreach (var g in _ghosts.Where(g => g.Stale)) Destroy(g);
+            _ghosts.RemoveAll(g => g.Stale);
         }
 
         private static int Key(GameObjectDice d) => unchecked((int)(d.Pointer.ToInt64() >> 3));
@@ -126,7 +159,7 @@ namespace DiceMultiplayer.Sync
         {
             foreach (var old in _ghosts.Where(g => g.PlayerId == m.id && g.Uid == m.uid)) Destroy(old);
             _ghosts.RemoveAll(g => g.PlayerId == m.id && g.Uid == m.uid);
-            _ghosts.Add(new Ghost { PlayerId = m.id, Uid = m.uid, X = m.sx, Y = m.sy, Name = m.text, Value = m.btn, Vis = m.vis });
+            _ghosts.Add(new Ghost { PlayerId = m.id, Uid = m.uid, X = m.sx, Y = m.sy, Name = m.text, Value = m.btn, Vis = m.vis, Data = m.path, Face = (int)m.h });
         }
 
         public static void OnRemoteRemove(Msg m)
@@ -135,33 +168,169 @@ namespace DiceMultiplayer.Sync
             _ghosts.RemoveAll(g => g.PlayerId == m.id && g.Uid == m.uid);
         }
 
+        /// <summary>
+        /// Fin de tour d'un autre joueur. Pendant ma propre exécution, on garde ses dés (leurs bonus comptent encore pour mes
+        /// dés) : ils sont marqués périmés et retirés juste avant ma défausse.
+        /// </summary>
         public static void OnRemoteClear(Msg m)
         {
-            foreach (var g in _ghosts.Where(g => g.PlayerId == m.id)) Destroy(g);
-            _ghosts.RemoveAll(g => g.PlayerId == m.id);
+            bool now = Planning;
+            foreach (var g in _ghosts.Where(g => g.PlayerId == m.id))
+            {
+                if (now || g.Real == null) Destroy(g);
+                else g.Stale = true;
+            }
+            _ghosts.RemoveAll(g => g.PlayerId == m.id && (now || g.Real == null) );
         }
 
         private static void Destroy(Ghost g)
         {
+            RemoveReal(g);
             if (g.Go != null) try { UnityEngine.Object.Destroy(g.Go); } catch { }
             g.Go = null;
         }
 
-        /// <summary>Chaque frame en combat : crée les visuels manquants, et les recrée si la scène les a détruits.</summary>
+        /// <summary>Chaque frame en combat : pose les vrais dés manquants (ou, à défaut, les visuels).</summary>
         public static void Update()
         {
             if (_ghosts.Count == 0 || !Game.InBattle) return;
+            bool planning = Planning;
+            if (planning && _ghosts.Any(g => g.Stale))
+            {
+                foreach (var g in _ghosts.Where(g => g.Stale)) Destroy(g);
+                _ghosts.RemoveAll(g => g.Stale);
+            }
+
             BoardSlot[] slots = null;
             foreach (var g in _ghosts)
             {
-                if (g.Go != null || g.Failed) continue;
+                if (!ReferenceEquals(g.Real, null) && g.Real == null) { g.Real = null; g.Slot = null; }   // détruit par le jeu
+                if (g.Real != null || g.Go != null) continue;
                 slots ??= UnityEngine.Object.FindObjectsOfType<BoardSlot>().ToArray();
                 var slot = slots.FirstOrDefault(s => { var c = s.CurrentCoord; return c.x == g.X && c.y == g.Y && s.gameObject.activeInHierarchy; });
                 if (slot == null) continue;
+
+                if (!g.RealFailed && !string.IsNullOrEmpty(g.Data))
+                {
+                    if (!planning) continue;   // pose seulement pendant la phase de préparation
+                    try { PlaceReal(g, slot); }
+                    catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("Dé distant (réel) : " + e); }
+                    if (g.Real != null) continue;
+                    g.RealFailed = true;
+                }
+                if (g.Failed) continue;
                 try { g.Go = BuildVisual(g, slot); }
                 catch (Exception e) { g.Failed = true; MultiplayerMod.Instance.Logger.LogWarning("Visuel de dé distant : " + e.Message); }
                 if (g.Go == null) g.Failed = true;
             }
+
+            // Le jeu peut réactiver les clics ou repeindre le dé : on réapplique régulièrement
+            if (Time.unscaledTime >= _nextFix)
+            {
+                _nextFix = Time.unscaledTime + 0.5f;
+                foreach (var g in _ghosts.Where(g => g.Real != null)) Decorate(g);
+            }
+        }
+
+        // ───────────── Vrais dés distants ─────────────
+
+        /// <summary>
+        /// Pose une copie réelle du dé distant dans la case, par le chemin du jeu (BattleBoard.PlaceDiceOnSlot, contexte
+        /// System, comme les dés posés par les ennemis). Les interactions entre dés (bonus, prisme, vide, miroir…) sont
+        /// alors calculées nativement, dans les deux sens. Effets de bord annulés : énergie restaurée, dé retiré des listes
+        /// du DiceManager, et ses propres actions exclues (GetBattleActions) : c'est son propriétaire qui les exécute.
+        /// </summary>
+        private static void PlaceReal(Ghost g, BoardSlot slot)
+        {
+            if (Game.Safe(() => slot.HasPlacedDice)) return;   // case occupée chez moi : visuel seulement
+            var board = Game.Safe(() => slot.board) ?? UnityEngine.Object.FindObjectOfType<BattleBoard>();
+            var dm = Game.Dice;
+            var player = Game.Player;
+            if (board == null || dm == null || player == null) return;
+
+            var ad = new ActiveDice(g.Data);
+            ad.uid = _ghostUid--;
+            try { ad.faces.SetFace(g.Face); } catch { }
+
+            int energy = dm.CurrentEnergy;
+            var lastPlaced = dm.lastActiveDicePlacedOnBoard;
+            GameObjectDice go;
+            PlacingGhost = true;
+            try { go = board.PlaceDiceOnSlot(ad, player, slot, BattleBoard.PlaceDiceContext.System, false, null); }
+            finally { PlacingGhost = false; }
+            if (go == null) return;
+
+            g.Real = go;
+            g.Slot = slot;
+            try { ad.faces.SetFace(g.Face); go.RefreshVisuals(); } catch { }
+            if (dm.CurrentEnergy != energy) dm.CurrentEnergy = energy;
+            dm.lastActiveDicePlacedOnBoard = lastPlaced;
+            Purge(dm, ad);
+            Decorate(g);
+            try { board.RecalculateAllBattleValues(); } catch { }
+            MultiplayerMod.Instance.Logger.LogInfo($"Dé de {Coop.NameOf(g.PlayerId)} posé en ({g.X},{g.Y}) : {g.Name} {g.Value}");
+        }
+
+        private static void RemoveReal(Ghost g)
+        {
+            var dice = g.Real;
+            var slot = g.Slot;
+            g.Real = null;
+            g.Slot = null;
+            if (dice == null) return;
+            var dm = Game.Dice;
+            int energy = dm != null ? dm.CurrentEnergy : 0;
+            var board = slot != null ? Game.Safe(() => slot.board) : null;
+            try
+            {
+                var ad = Game.Safe(() => dice.CurrentActiveDice);
+                if (board != null && slot != null) try { board.RemoveDiceFromSlot(slot, dice); } catch { }
+                if (slot != null) try { slot.RemoveDice(); } catch { }
+                var hand = UnityEngine.Object.FindObjectOfType<HandUI>();
+                if (hand != null) try { hand.RemoveDice(dice); } catch { }
+                if (dm != null && ad != null) Purge(dm, ad);
+                dice.gameObject.SetActive(false);
+                UnityEngine.Object.Destroy(dice.gameObject);
+            }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogDebug("Retrait dé distant : " + e.Message); }
+            if (dm != null && dm.CurrentEnergy != energy) dm.CurrentEnergy = energy;
+            if (board != null)
+            {
+                try { board.RefreshActiveBoardSlots(); } catch { }
+                try { board.RecalculateAllBattleValues(); } catch { }
+            }
+        }
+
+        /// <summary>Retire le dé copié de toutes les listes du DiceManager (il ne m'appartient pas).</summary>
+        private static void Purge(DiceManager dm, ActiveDice ad)
+        {
+            foreach (var list in new DiceManager.DiceList[] { dm.diceInHand, dm.diceOnBoard, dm.diceInDrawPile, dm.diceInDiscardPile, dm.diceInExilePile })
+            {
+                if (list == null) continue;
+                try
+                {
+                    var all = list.AllDice;
+                    bool found = false;
+                    for (int i = 0; i < all.Count; i++) if (all[i] != null && all[i].Pointer == ad.Pointer) { found = true; break; }
+                    if (found) list.Remove(ad);
+                }
+                catch { }
+            }
+        }
+
+        /// <summary>Non cliquable, contour à la couleur du joueur.</summary>
+        private static void Decorate(Ghost g)
+        {
+            var go = g.Real;
+            if (go == null) return;
+            try
+            {
+                foreach (var gr in go.GetComponentsInChildren<Graphic>(true)) gr.raycastTarget = false;
+                foreach (var cg in go.GetComponentsInChildren<CanvasGroup>(true)) cg.blocksRaycasts = false;
+                var col = ParseHex(Coop.ColorOf(g.PlayerId));
+                foreach (var sc in go.GetComponentsInChildren<SwapColor>(true)) SetBorderColor(sc, col);
+            }
+            catch { }
         }
 
         private static GameObject BuildVisual(Ghost g, BoardSlot slot)
