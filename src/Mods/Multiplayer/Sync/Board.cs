@@ -91,7 +91,7 @@ namespace DiceMultiplayer.Sync
 
         public static void OnLocalRemove(GameObjectDice dice)
         {
-            if (!Coop.Active || dice == null) return;
+            if (!Coop.Active || dice == null || IsGhostDice(dice)) return;
             Coop.Send(new Msg { t = T.BoardRemove, uid = Key(dice) });
         }
 

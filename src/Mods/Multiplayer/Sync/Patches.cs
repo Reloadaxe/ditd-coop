@@ -79,6 +79,15 @@ namespace DiceMultiplayer.Sync
             // Dés des autres posés en vrai dans mes cases : leurs actions ne comptent pas chez moi, et ils ne vont pas dans ma défausse
             P(h, typeof(BoardSlot), nameof(BoardSlot.GetBattleActions), nameof(GhostActionsPostfix), postfix: true);
             P(h, typeof(BattleBoard), nameof(BattleBoard.DiscardAllDice), nameof(DiscardAllPrefix));
+            // Les dés des autres sont verrouillés : ni clic, ni sélection, ni déplacement
+            foreach (var mn in new[] { "OnDicePointerDown", "OnDicePointerClick", "OnCustomPointerClick", "OnLeftClick", "OnRightClick" })
+                P(h, typeof(GameObjectDice), mn, nameof(GhostDiceInputPrefix));
+            foreach (var m in typeof(BattleBoard).GetMethods().Where(x => x.Name == nameof(BattleBoard.SelectDiceFromBoard)))
+            {
+                _total++;
+                try { h.Patch(m, prefix: new HarmonyMethod(typeof(Patches), nameof(GhostSelectPrefix))); _ok++; }
+                catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("Patch SelectDiceFromBoard : " + e.Message); }
+            }
 
             // 4) Ennemis partagés : mes dégâts sont envoyés aux autres
             P(h, typeof(Enemy), "_Damage", nameof(EnemyDamagePostfix), postfix: true);
@@ -239,8 +248,13 @@ namespace DiceMultiplayer.Sync
         // ───── Plateau ─────
         private static bool PlaceDicePrefix(BoardSlot __0, GameObjectDice __1, BattleBoard.PlaceDiceContext __3)
         {
-            if (__3 != BattleBoard.PlaceDiceContext.Player) return true;
-            try { return Board.OnLocalPlace(__0, __1); }
+            try
+            {
+                // Un dé d'un autre joueur ne peut être posé que par le mod lui-même
+                if (!Board.PlacingGhost && Board.IsGhostDice(__1)) return false;
+                if (__3 != BattleBoard.PlaceDiceContext.Player) return true;
+                return Board.OnLocalPlace(__0, __1);
+            }
             catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("PlaceDicePrefix : " + e.Message); return true; }
         }
 
@@ -253,6 +267,16 @@ namespace DiceMultiplayer.Sync
             }
             catch { }
             return true;
+        }
+
+        private static bool GhostDiceInputPrefix(GameObjectDice __instance)
+        {
+            try { return !(Coop.Active && Board.IsGhostDice(__instance)); } catch { return true; }
+        }
+
+        private static bool GhostSelectPrefix(GameObjectDice __0)
+        {
+            try { return !(Coop.Active && Board.IsGhostDice(__0)); } catch { return true; }
         }
 
         private static void GhostActionsPostfix(BoardSlot __instance, ref Il2CppSystem.Collections.Generic.List<BattleSystem.BattleAction> __result)
