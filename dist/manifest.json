@@ -1,6 +1,6 @@
 {
-    "version":  "0.10.5",
-    "changelog":  "Les dés qui restent sur le plateau (lourds…) restent visibles chez les autres joueurs",
+    "version":  "0.11.0",
+    "changelog":  "Mort en coop : K.O. (spectateur) puis retour à 1 PV ; défaite seulement si toute l\u0027équipe tombe",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "91b59b670a289c91c2d9111b713187870530eeb67795a1a8aae8e868864d592e",
+                      "sha256":  "cbd2f6e50b9e2af61d9e9c1376ecc5de3b19053a88cd7cbf990df71a4aca6c6f",
                       "size":  50176,
-                      "version":  "0.10.5"
+                      "version":  "0.11.0"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.10.5"
+                      "version":  "0.11.0"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "c7bd90adc883d4599225d7e8464fb7cb8a3f1e589f4a398042affd859871bf5e",
+                      "sha256":  "2efb9d0658aa6719a98ffef1c29cbbe26e2ce25dd60247e653a5901ded893c9b",
                       "size":  10752,
-                      "version":  "0.10.5",
+                      "version":  "0.11.0",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "a608934702eae836f7420cc13a5c2d02df13edbccf7b9f0aa6c5939cbd7a2680",
+                      "sha256":  "6fde8a676a5a0bc3be1236d5bb51eeac3d28ec66e0c92e39b93e79faf615752a",
                       "size":  8704,
-                      "version":  "0.10.5",
+                      "version":  "0.11.0",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "54d9fb62ef38177564162ae65a4b979e72851f7ced5f26d4ec9f272608fdcf52",
-                      "size":  176640,
-                      "version":  "0.10.5"
+                      "sha256":  "3159cc3a1d64d4ca1f21a5ce8aace2b8bbdab753bad27e5b046595af03c320bb",
+                      "size":  178688,
+                      "version":  "0.11.0"
                   }
               ],
     "remove":  [

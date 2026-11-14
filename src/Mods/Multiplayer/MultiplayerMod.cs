@@ -13,7 +13,7 @@ namespace DiceMultiplayer
     /// Mod multijoueur coop (2 ou 3 joueurs) en TCP direct.
     /// Tout le monde joue la même run, synchronisée en lockstep sur les entrées. Voir Sync/Coop.cs.
     /// </summary>
-    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.10.5",
+    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.11.0",
         Author = "DiceModding", Description = "Coop à 2 ou 3 : chacun sa run et son héros, ennemis et plateau partagés (TCP).")]
     public class MultiplayerMod : DiceMod
     {
@@ -74,6 +74,7 @@ namespace DiceMultiplayer
             try { Coop.UpdateReadyVisual(); } catch { }
             try { Combat.UpdateExecWait(); } catch (Exception e) { Logger.LogDebug("ExecWait : " + e.Message); }
             try { Spells.Update(); } catch { }
+            try { Knockout.Update(); } catch { }
             try { Board.UpdateSlotValues(); } catch (Exception e) { Logger.LogDebug("SlotValues : " + e.Message); }
 
 
@@ -103,11 +104,13 @@ namespace DiceMultiplayer
             if (state == BattleSystem.TurnState.SelectDice && Coop.IsHost) Game.Schedule(Combat.HostBroadcastOncePerTurn, 0.5f);
             // Dés restés sur mon plateau (lourds…) : renvoyés aux autres à chaque nouveau tour
             if (state == BattleSystem.TurnState.SelectDice) Game.Schedule(Board.ResendOwnDice, 0.8f);
+            if (state == BattleSystem.TurnState.SelectDice) Knockout.AutoReady();
         }
 
         public override void OnBattleEnd(BattleSystem battle, BattleSystem.EndState result)
         {
             Coop.ClearReady();
+            Knockout.OnBattleEnd(result);
             Board.Reset();
         }
 
@@ -164,7 +167,7 @@ namespace DiceMultiplayer
         private static int FloorKey() => _floorKey;
         public static int CurrentFloorKey => _floorKey;
 
-        public override void OnRunStart(CurrentRunData run, bool loaded) { _floorKey = 0; Coop.DesyncWarning = null; }
+        public override void OnRunStart(CurrentRunData run, bool loaded) { _floorKey = 0; Coop.DesyncWarning = null; Knockout.Reset(); }
 
         // ───────────── Interface (voir Ui/Hud.cs) ─────────────
 

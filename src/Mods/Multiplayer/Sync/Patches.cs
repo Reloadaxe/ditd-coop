@@ -94,6 +94,8 @@ namespace DiceMultiplayer.Sync
 
             // 4) Ennemis partagés : mes dégâts sont envoyés aux autres
             P(h, typeof(Enemy), "_Damage", nameof(EnemyDamagePostfix), postfix: true);
+            // Mort en coop : K.O. (spectateur) puis retour à 1 PV, tant qu'un autre joueur est debout
+            P(h, typeof(Player), nameof(Player.CanCompleteDeath), nameof(CanCompleteDeathPrefix));
             // Phase ennemie retenue tant que les autres joueurs n'ont pas fini d'exécuter leurs dés
             P(h, typeof(BattleSystem), nameof(BattleSystem.ChangeState), nameof(BattleChangeStatePrefix));
             // Sorts d'ennemis sur le plateau (points faibles du boss scorpion) : l'hôte fait foi
@@ -341,6 +343,7 @@ namespace DiceMultiplayer.Sync
             try
             {
                 if (!__result || !Coop.Active || Board.PlacingGhost || __instance == null) return;
+                if (Knockout.LocalKO) { __result = false; return; }   // K.O. : spectateur
                 var c = __instance.CurrentCoord;
                 if (Board.IsTakenByOther(c.x, c.y) || Board.IsGhostSlot(__instance)) __result = false;
             }
@@ -383,6 +386,12 @@ namespace DiceMultiplayer.Sync
         {
             try { Combat.OnEnemyDamaged(__instance, __0); }
             catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("EnemyDamagePostfix : " + e.Message); }
+        }
+
+        private static bool CanCompleteDeathPrefix(Player __instance, ref bool __result)
+        {
+            try { return Knockout.OnCanCompleteDeath(__instance, ref __result); }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("CanCompleteDeathPrefix : " + e.Message); return true; }
         }
 
         private static bool CastWeakSpotPrefix(BoardSlot __instance, SpellData __0, int __1, BoardSlot.BoardDirection __2)

@@ -67,7 +67,7 @@ namespace DiceMultiplayer.Sync
             var p = Game.Player;
             if (p == null) return;
             int hp = Game.Safe(() => p.CurrentHealth), max = Game.Safe(() => p.MaxHealth), blk = Game.Safe(() => p.CurrentBlock);
-            bool ko = Game.Safe(() => p.IsDyingOrDead);
+            bool ko = Knockout.LocalKO || Game.Safe(() => p.IsDyingOrDead);
             string key = $"{hp}/{max}/{blk}/{ko}";
             if (key == _lastSent && Time.unscaledTime % 2f > 0.3f) return;   // pas de doublon, sauf un rappel régulier
             _lastSent = key;
@@ -285,7 +285,7 @@ namespace DiceMultiplayer.Sync
             if (cam == null || !Coop.Active || _local == null) return res;
             var localHealth = Game.Safe(() => _local.MyEntityCanvas != null ? _local.MyEntityCanvas.currentHealthDice : null);
             var p = TopOf(localHealth) ?? Above(cam, _local.transform);
-            if (p != null) res.Add((Coop.LocalId, p.Value, null));
+            if (p != null) res.Add((Coop.LocalId, p.Value, Knockout.LocalKO ? "<color=#ff7a6b>K.O.</color>" : null));
             foreach (var r in _remotes.Values)
             {
                 if (r.Go == null && !r.KO) continue;
