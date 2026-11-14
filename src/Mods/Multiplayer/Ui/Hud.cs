@@ -59,6 +59,7 @@ namespace DiceMultiplayer.Ui
                 catch (Exception e) { M.Logger.LogError("Interface du mod : " + e); _built = true; return; }
             }
             if (Root == null) return;
+            try { AttachToCursorLayer(); } catch (Exception e) { Debug("calque", e); }
 
             try { UpdateMenuButton(); } catch (Exception e) { Debug("menu", e); }
             try { UpdatePanel(); } catch (Exception e) { Debug("panneau", e); }
@@ -70,6 +71,13 @@ namespace DiceMultiplayer.Ui
             try { UpdateHeroes(); } catch (Exception e) { Debug("héros", e); }
             try { UpdatePreviews(); } catch (Exception e) { Debug("aperçus", e); }
             try { UpdateCursors(); } catch (Exception e) { Debug("curseurs", e); }
+        }
+
+        /// <summary>Vrai si ce point de l'écran est sur une fenêtre du mod : le jeu ne doit pas recevoir le clic.</summary>
+        public static bool BlocksPointer(Vector2 screen)
+        {
+            if (Root == null) return false;
+            return Contains(_waiting, screen) || Contains(_panel, screen) || (_menuBtn != null && Contains(_menuBtn.Rect, screen));
         }
 
         private static float _nextDebug;

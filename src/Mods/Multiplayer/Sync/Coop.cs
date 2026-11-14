@@ -224,8 +224,15 @@ namespace DiceMultiplayer.Sync
 
         public static bool OnLocalClick(Il2CppObjectBase instance, PointerEventData data, MethodBase original)
         {
+            // Interface du mod : ses propres boutons passent ; un clic du jeu sous une fenêtre du mod est bloqué
+            try
+            {
+                var hc = instance.TryCast<Component>();
+                if (hc != null && Ui.GameUi.Owns(hc)) return true;
+                if (data != null && Ui.Hud.BlocksPointer(data.position)) return false;
+            }
+            catch { }
             if (!Active || Replaying) return true;
-            try { var hc = instance.TryCast<Component>(); if (hc != null && Ui.GameUi.Owns(hc)) return true; } catch { }   // interface du mod
             try
             {
                 var c = instance.TryCast<Component>();

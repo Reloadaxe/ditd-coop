@@ -57,10 +57,10 @@ namespace DiceMultiplayer.Ui
 
             var go = new GameObject("DIM_Hud");
             UnityEngine.Object.DontDestroyOnLoad(go);
-            var canvas = go.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 600;
-            canvas.pixelPerfect = true;
+            _canvas = go.AddComponent<Canvas>();
+            _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            _canvas.sortingOrder = 600;
+            _canvas.pixelPerfect = true;
             var cs = go.AddComponent<CanvasScaler>();
             cs.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             cs.referenceResolution = new Vector2(RefW, RefH);
@@ -68,8 +68,42 @@ namespace DiceMultiplayer.Ui
             cs.referencePixelsPerUnit = 27f;
             go.AddComponent<GraphicRaycaster>();
             Root = go.GetComponent<RectTransform>();
+            AttachToCursorLayer();
             return true;
         }
+
+        private static Canvas _canvas;
+
+        /// <summary>Caméra du canvas du mod (null en superposition).</summary>
+        public static Camera Cam => _canvas != null && _canvas.renderMode == RenderMode.ScreenSpaceCamera ? _canvas.worldCamera : null;
+
+        /// <summary>
+        /// Le pointeur du jeu est une image dans son propre canvas (« Cursor Visual [Canvas 900] », caméra). Un canvas en
+        /// superposition passerait par-dessus et le cacherait : on se met dans le même calque, juste en dessous de lui.
+        /// Appelé chaque frame (la caméra peut changer d'une scène à l'autre).
+        /// </summary>
+        public static void AttachToCursorLayer()
+        {
+            if (_canvas == null) return;
+            if (_canvas.renderMode == RenderMode.ScreenSpaceCamera && _canvas.worldCamera != null) return;
+            Canvas cursor = null;
+            foreach (var c in UnityEngine.Object.FindObjectsOfType<Canvas>())
+                if (c != null && c.name.StartsWith("Cursor Visual") && c.renderMode == RenderMode.ScreenSpaceCamera && c.worldCamera != null) { cursor = c; break; }
+            if (cursor == null)
+            {
+                if (_canvas.renderMode != RenderMode.ScreenSpaceOverlay) { _canvas.renderMode = RenderMode.ScreenSpaceOverlay; _canvas.sortingOrder = 600; }
+                return;
+            }
+            _canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            _canvas.worldCamera = cursor.worldCamera;
+            _canvas.planeDistance = Math.Max(0.5f, cursor.planeDistance * 0.9f);
+            _canvas.sortingLayerID = cursor.sortingLayerID;
+            _canvas.sortingOrder = cursor.sortingOrder - 10;
+        }
+
+        /// <summary>Vrai si ce point de l'écran est sur l'un de ces éléments actifs du mod.</summary>
+        public static bool Contains(RectTransform rt, Vector2 screen) =>
+            rt != null && rt.gameObject.activeInHierarchy && RectTransformUtility.RectangleContainsScreenPoint(rt, screen, Cam);
 
         public static bool Owns(Component c)
         {
@@ -420,7 +454,7 @@ namespace DiceMultiplayer.Ui
         /// <summary>Position écran (pixels, origine en bas à gauche) → position locale dans le canvas du mod.</summary>
         public static Vector2 ToLocal(Vector2 screen)
         {
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(Root, screen, null, out var local);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(Root, screen, Cam, out var local);
             return local;
         }
 
