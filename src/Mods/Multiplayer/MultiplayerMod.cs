@@ -4,6 +4,7 @@ using BepInEx.Configuration;
 using DiceLoader;
 using DiceMultiplayer.Net;
 using DiceMultiplayer.Sync;
+using DiceMultiplayer.Ui;
 using UnityEngine;
 
 namespace DiceMultiplayer
@@ -12,7 +13,7 @@ namespace DiceMultiplayer
     /// Mod multijoueur coop (2 ou 3 joueurs) en TCP direct.
     /// Tout le monde joue la même run, synchronisée en lockstep sur les entrées. Voir Sync/Coop.cs.
     /// </summary>
-    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.8.3",
+    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.9.0",
         Author = "DiceModding", Description = "Coop à 2 ou 3 : chacun sa run et son héros, ennemis et plateau partagés (TCP).")]
     public class MultiplayerMod : DiceMod
     {
@@ -61,6 +62,8 @@ namespace DiceMultiplayer
 
         public override void OnUpdate()
         {
+            try { UiDump.Update(); } catch { }
+            try { Hud.Update(); } catch (Exception e) { Logger.LogDebug("Hud : " + e.Message); }
             var net = Coop.Net;
             if (net == null) return;
             net.Pump();
@@ -156,110 +159,52 @@ namespace DiceMultiplayer
 
         public override void OnRunStart(CurrentRunData run, bool loaded) { _floorKey = 0; Coop.DesyncWarning = null; }
 
-        // ───────────── Overlay ─────────────
+        // ───────────── Interface (voir Ui/Hud.cs) ─────────────
 
+        /// <summary>Panneau coop ouvert (touche F2, bouton « Multijoueur » de l'écran titre).</summary>
+        public bool PanelOpen { get; set; }
+        public string PlayerName { get => LocalName; set => LocalName = value; }
+        public int Port { get => _port.Value; set => _port.Value = value; }
+        public string HostIp { get => _host.Value; set => _host.Value = value; }
+        public bool ShowCursors { get => _showCursors.Value; set => _showCursors.Value = value; }
+
+        public void HostGame()
+        {
+            try { Coop.Attach(NetSession.Host(_port.Value, LocalName)); Coop.AddLog($"Partie créée sur le port {_port.Value}"); }
+            catch (Exception e) { Coop.AddLog("Impossible d'héberger : " + e.Message); Coop.Toast("Impossible d'héberger : " + e.Message); }
+        }
+
+        public void JoinGame()
+        {
+            try { Coop.Attach(NetSession.Join(_host.Value.Trim(), _port.Value, LocalName)); }
+            catch (Exception e) { Coop.AddLog("Connexion impossible : " + e.Message); Coop.Toast("Connexion impossible : " + e.Message); }
+        }
+
+        public void LeaveGame()
+        {
+            Coop.Detach();
+            Coop.AddLog("Session fermée.");
+        }
+
+        public void SendChat(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text) || Coop.Net == null) return;
+            Coop.Send(new Msg { t = T.Chat, text = text.Trim() });
+            Coop.AddLog($"{LocalName} : {text.Trim()}");
+        }
+
+        /// <summary>IMGUI : seulement le raccourci F2 et la position de la souris (envoyée aux autres pour les curseurs).</summary>
         public override void OnGUI()
         {
             var ev = Event.current;
-            if (ev != null) _mouse = new Vector2(ev.mousePosition.x, Screen.height - ev.mousePosition.y);
-
-            // Écran d'attente du client (avant que l'hôte n'ouvre la sélection)
-            if (Lobby.ClientWaiting && !_panelOpen)
+            if (ev == null) return;
+            _mouse = new Vector2(ev.mousePosition.x, Screen.height - ev.mousePosition.y);
+            if (ev.type == EventType.KeyDown)
             {
-                Lobby.DrawWaitingScreen(() =>
-                {
-                    UI.BeginRow();
-                    if (UI.Button("Quitter la partie", 160)) { Coop.Detach(); Coop.AddLog("Session fermée."); }
-                    if (UI.Button("Panneau coop (F2)", 160)) _panelOpen = true;
-                    UI.EndRow();
-                });
-                if (ev != null && ev.type == EventType.KeyDown && ev.keyCode == KeyCode.F2) { _panelOpen = true; ev.Use(); }
-                return;
+                if (ev.keyCode == KeyCode.F2) { PanelOpen = !PanelOpen; ev.Use(); }
+                else if (ev.keyCode == KeyCode.Escape && PanelOpen) { PanelOpen = false; ev.Use(); }
+                else if ((ev.keyCode == KeyCode.Return || ev.keyCode == KeyCode.KeypadEnter) && PanelOpen) Hud.OnReturn();
             }
-
-            // Panneau coop : touche F2 ou bouton en haut à gauche
-            if (ev != null && ev.type == EventType.KeyDown && ev.keyCode == KeyCode.F2) { _panelOpen = !_panelOpen; ev.Use(); }
-            if (_panelOpen) DrawPanel();
-            else if (!Game.InRun)
-            {
-                GUILayout.BeginArea(new Rect(10, 10, 220, 34));
-                if (UI.Button(Coop.Active ? $"Coop : {Coop.Net.Players.Count} joueur(s) (F2)" : "Multijoueur coop (F2)")) _panelOpen = true;
-                GUILayout.EndArea();
-            }
-
-            if (!Coop.Active) return;
-            if (ev == null || ev.type != EventType.Repaint) return;
-
-            // Liste des joueurs (en haut à droite)
-            float w = 240, x = Screen.width - w - 10, y = 10;
-            var players = Coop.Net.Players.OrderBy(p => p.Id).ToList();
-            GUI.Box(new Rect(x, y, w, 26 + players.Count * 20 + (Game.InBattle ? 20 : 0)), "");
-            GUI.Label(new Rect(x + 8, y + 4, w, 20), $"<b>Coop (F2)</b> - chemin choisi au vote");
-            y += 24;
-            foreach (var p in players)
-            {
-                string me = p.Id == Coop.LocalId ? " (toi)" : "";
-                string extra;
-                if (!Game.InRun)
-                    extra = Team.Picks.TryGetValue(p.Id, out var pick) ? $"  ✔ {Team.Describe(pick)}" : "  … choisit";
-                else
-                {
-                    var rp = Team.RunPicks.FirstOrDefault(r => r.Id == p.Id);
-                    extra = rp != null ? $" ({(Player.CharacterName)rp.Run.Character})" : "";
-                    if (Game.InBattle) extra += Coop.ReadyPlayers.Contains(p.Id) ? "  ✔ prêt" : "  … joue";
-                }
-                GUI.Label(new Rect(x + 8, y, w, 20), $"<color={p.Color}>●</color> {p.Name}{me}{extra}");
-                y += 20;
-            }
-            if (Game.InBattle) GUI.Label(new Rect(x + 8, y, w, 20), "<i>Fin de tour : tout le monde doit valider</i>");
-
-            // Noms au-dessus des personnages
-            try { Heroes.DrawLabels(); } catch { }
-
-            // Curseurs des autres joueurs
-            if (_showCursors.Value)
-            {
-                string scene = Game.State.ToString();
-                foreach (var kv in Coop.Cursors)
-                {
-                    if (kv.Key == Coop.LocalId || kv.Value.scene != scene || Time.unscaledTime - kv.Value.time > 3f) continue;
-                    float cx = kv.Value.x * Screen.width, cy = Screen.height - kv.Value.y * Screen.height;
-                    GUI.Label(new Rect(cx - 6, cy - 10, 30, 24), $"<size=22><color={Coop.ColorOf(kv.Key)}>➤</color></size>");
-                    GUI.Label(new Rect(cx + 14, cy + 4, 160, 20), $"<color={Coop.ColorOf(kv.Key)}>{Coop.NameOf(kv.Key)}</color>");
-                }
-            }
-
-            // Dés posés par les autres joueurs sur le plateau
-            try { Board.DrawGhosts(); } catch { }
-            try { Coop.DrawVotes(); } catch { }
-            try { Coop.DrawReadyBanner(); } catch { }
-            try { Preview.Draw(); } catch { }
-
-            // Toast et alerte de désynchronisation
-            if (Coop.ToastText != null && Time.unscaledTime < Coop.ToastUntil)
-                GUI.Box(new Rect(Screen.width / 2f - 200, 60, 400, 28), Coop.ToastText);
-            if (Coop.DesyncWarning != null)
-                GUI.Label(new Rect(10, 10, 700, 40), $"<size=16><color=#ff5050><b>⚠ {Coop.DesyncWarning}</b></color></size>");
-        }
-
-        private bool _panelOpen;
-        private Vector2 _panelScroll;
-
-        private void DrawPanel()
-        {
-            var r = new Rect(10, 10, 460, Math.Min(620f, Screen.height - 20f));
-            GUI.Box(r, "");
-            GUILayout.BeginArea(new Rect(r.x + 10, r.y + 8, r.width - 20, r.height - 16));
-            UI.BeginRow();
-            UI.Header("Multijoueur coop");
-            GUILayout.FlexibleSpace();
-            if (UI.Button("Fermer (F2)", 110)) _panelOpen = false;
-            UI.EndRow();
-            _panelScroll = GUILayout.BeginScrollView(_panelScroll, UI.None);
-            try { OnSettingsGUI(); }
-            catch (Exception e) { UI.Label("Erreur : " + e.Message); Logger.LogError(e); }
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
         }
 
 

@@ -249,32 +249,35 @@ namespace DiceMultiplayer.Sync
             _local = null;
         }
 
-        // ───────────── Affichage (OnGUI, phase Repaint) ─────────────
+        // ───────────── Données d'affichage (voir Ui/Hud.cs) ─────────────
 
-        public static void DrawLabels()
+        /// <summary>Noms au-dessus des héros : joueur, position écran, texte d'état éventuel (K.O., PV si pas d'interface).</summary>
+        public static List<(int id, Vector2 screen, string extra)> HeroLabels()
         {
+            var res = new List<(int, Vector2, string)>();
             var cam = Camera.main;
-            if (cam == null || !Coop.Active || _local == null) return;
-            Label(cam, _local.transform, $"<b><color={Coop.ColorOf(Coop.LocalId)}>{Coop.NameOf(Coop.LocalId)}</color></b>");
+            if (cam == null || !Coop.Active || _local == null) return res;
+            var p = Above(cam, _local.transform);
+            if (p != null) res.Add((Coop.LocalId, p.Value, null));
             foreach (var r in _remotes.Values)
             {
                 if (r.Go == null && !r.KO) continue;
                 var t = r.Go != null ? r.Go.transform : _local.transform;
-                // PV et bloc : affichés par l'interface du jeu (EntityCanvas) quand elle existe, sinon en texte
-                string stats = r.KO ? "<color=#ff6060>K.O.</color>"
-                             : r.HpText != null ? "" : $"♥ {r.Hp}/{r.MaxHp}" + (r.Block > 0 ? $"  ⛨ {r.Block}" : "");
-                Label(cam, t, $"<b><color={Coop.ColorOf(r.PlayerId)}>{Coop.NameOf(r.PlayerId)}</color></b>  {stats}", r.Go == null ? -30 : 0);
+                string extra = r.KO ? "<color=#ff7a6b>K.O.</color>"
+                             : r.HpText != null ? null : $"PV {r.Hp}/{r.MaxHp}" + (r.Block > 0 ? $"  Bloc {r.Block}" : "");
+                var s = Above(cam, t);
+                if (s != null) res.Add((r.PlayerId, s.Value + (r.Go == null ? new Vector2(0, 40) : Vector2.zero), extra));
             }
+            return res;
         }
 
-        private static void Label(Camera cam, Transform t, string text, float dy = 0)
+        private static Vector2? Above(Camera cam, Transform t)
         {
             float hgt = 2f;
             var sr = t.GetComponentInChildren<SpriteRenderer>();
             if (sr != null) hgt = Math.Min(4f, sr.bounds.size.y);
             var s = cam.WorldToScreenPoint(t.position + new Vector3(0, hgt * 1.05f, 0));
-            if (s.z < 0) return;
-            GUI.Label(new Rect(s.x - 80, Screen.height - s.y - 10 + dy, 220, 22), text);
+            return s.z < 0 ? (Vector2?)null : new Vector2(s.x, s.y);
         }
 
         public static bool AnyRemoteAlive => _remotes.Values.Any(r => !r.KO && Time.unscaledTime - r.LastUpdate < 10f);

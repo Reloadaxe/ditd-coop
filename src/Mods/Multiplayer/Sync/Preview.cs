@@ -167,12 +167,16 @@ namespace DiceMultiplayer.Sync
             }
         }
 
-        /// <summary>Ennemis qu'aucune de mes flèches ne vise : petite étiquette pour les dégâts des autres.</summary>
-        public static void Draw()
+        /// <summary>
+        /// Ennemis qu'aucune de mes flèches ne vise mais que d'autres attaquent : position écran, joueurs et total
+        /// (affiché par Ui/Hud.cs).
+        /// </summary>
+        public static List<(Vector2 screen, List<int> ids, int total)> RemoteMarkers()
         {
-            if (!Coop.Active || !Game.InBattle || _remote.Count == 0) return;
+            var res = new List<(Vector2, List<int>, int)>();
+            if (!Coop.Active || !Game.InBattle || _remote.Count == 0) return res;
             var cam = Camera.main;
-            if (cam == null) return;
+            if (cam == null) return res;
 
             var targeted = new HashSet<IntPtr>();
             foreach (var a in Arrows())
@@ -183,12 +187,12 @@ namespace DiceMultiplayer.Sync
             {
                 if (targeted.Contains(e.Pointer)) continue;
                 int idx = SafeIdx(e);
-                var parts = new List<string>();
+                var ids = new List<int>();
                 int total = 0;
                 foreach (var kv in _remote.OrderBy(k => k.Key))
                     if (kv.Key != Coop.LocalId && kv.Value.TryGetValue(idx, out var dmg) && dmg > 0)
                     {
-                        parts.Add($"<color={Coop.ColorOf(kv.Key)}>●</color>");
+                        ids.Add(kv.Key);
                         total += dmg;
                     }
                 if (total == 0) continue;
@@ -198,10 +202,9 @@ namespace DiceMultiplayer.Sync
                 if (sr != null) h = Math.Min(4f, sr.bounds.size.y);
                 var s = cam.WorldToScreenPoint(e.transform.position + new Vector3(0, h * 1.15f, 0));
                 if (s.z < 0) continue;
-                var r = new Rect(s.x - 40, Screen.height - s.y - 26, 80, 24);
-                GUI.Box(r, ""); GUI.Box(r, "");
-                GUI.Label(new Rect(r.x + 8, r.y + 2, 70, 20), $"{string.Join("", parts)} <b>⚔ {total}</b>");
+                res.Add((new Vector2(s.x, s.y), ids, total));
             }
+            return res;
         }
     }
 }

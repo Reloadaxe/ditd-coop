@@ -59,7 +59,7 @@ namespace DiceMultiplayer.Sync
             return data;
         }
 
-        public static string Describe(RunData r) => r == null ? "…choisit" : $"{(Player.CharacterName)r.Character}";
+        public static string Describe(RunData r) => r == null ? "choisit..." : $"{(Player.CharacterName)r.Character}";
 
         public static RunData PickOf(int playerId) => RunPicks.FirstOrDefault(p => p.Id == playerId)?.Run;
 
@@ -76,7 +76,7 @@ namespace DiceMultiplayer.Sync
             Coop.Send(new Msg { t = T.Pick, run = pick, flag = true });
             Coop.AddLog($"Tu es prêt avec {Describe(pick)}.");
             if (Coop.IsHost) TryStart();
-            else Coop.Toast("Prêt ! En attente des autres joueurs…");
+            else Coop.Toast("Prêt ! En attente des autres joueurs");
             return false;
         }
 

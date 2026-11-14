@@ -225,6 +225,7 @@ namespace DiceMultiplayer.Sync
         public static bool OnLocalClick(Il2CppObjectBase instance, PointerEventData data, MethodBase original)
         {
             if (!Active || Replaying) return true;
+            try { var hc = instance.TryCast<Component>(); if (hc != null && Ui.GameUi.Owns(hc)) return true; } catch { }   // interface du mod
             try
             {
                 var c = instance.TryCast<Component>();
@@ -245,7 +246,7 @@ namespace DiceMultiplayer.Sync
                 }
             }
             catch { }
-            if (!Game.InRun && Lobby.ClientWaiting) { Toast("En attente de l'hôte…"); return false; }
+            if (!Game.InRun && Lobby.ClientWaiting) { Toast("En attente de l'hôte..."); return false; }
             return true;
         }
 
@@ -614,10 +615,11 @@ namespace DiceMultiplayer.Sync
             return null;
         }
 
-        /// <summary>Affiche les votes au-dessus des cases (OnGUI, phase Repaint).</summary>
-        public static void DrawVotes()
+        /// <summary>Votes à afficher : position écran de la case (ou flèche) votée et les votants (ids triés).</summary>
+        public static List<(Vector2 screen, List<int> voters)> VoteMarkers()
         {
-            if (!Active || !Game.InRun || (Votes.Count == 0 && !_awaitingChoice)) return;
+            var res = new List<(Vector2, List<int>)>();
+            if (!Active || !Game.InRun || Votes.Count == 0) return res;
             foreach (var grp in Votes.Values.GroupBy(Key))
             {
                 var first = grp.First();
@@ -627,31 +629,22 @@ namespace DiceMultiplayer.Sync
                 if (anchor == null) continue;
                 var sp = Board.ScreenPos(anchor);
                 if (sp == null) continue;
-                // Une pastille de la couleur de chaque votant (jusqu'à 3), au-dessus de la case et non sur son sprite :
-                // fond sombre + contour noir pour rester lisible sur n'importe quel décor
-                var voters = grp.OrderBy(v => v.id).ToList();
-                const float dot = 22f, gap = 4f;
-                float total = voters.Count * dot + (voters.Count - 1) * gap;
-                float gx = sp.Value.x - total / 2f, gy = Screen.height - sp.Value.y - 78;
-                var bg = new Rect(gx - 5, gy - 3, total + 10, dot + 6);
-                GUI.Box(bg, ""); GUI.Box(bg, "");
-                for (int i = 0; i < voters.Count; i++)
-                {
-                    float x = gx + i * (dot + gap);
-                    // contour : la pastille noire légèrement décalée dans 4 directions, puis la couleur par-dessus
-                    foreach (var o in new[] { (-1.5f, 0f), (1.5f, 0f), (0f, -1.5f), (0f, 1.5f) })
-                        GUI.Label(new Rect(x + o.Item1 - 2, gy + o.Item2 - 5, dot + 8, dot + 8), "<size=26><color=#000000>●</color></size>");
-                    GUI.Label(new Rect(x - 2, gy - 5, dot + 8, dot + 8), $"<size=26><color={ColorOf(voters[i].id)}>●</color></size>");
-                }
+                res.Add((sp.Value, grp.Select(v => v.id).OrderBy(i => i).ToList()));
             }
-            var missing = Net.Players.Where(p => !Votes.ContainsKey(p.Id)).Select(p => p.Name).ToList();
-            var away = new List<string>();   // le vote ne dépend plus de l'état « carte »
+            return res;
+        }
+
+        /// <summary>Texte d'état du vote (null s'il n'y a rien à afficher).</summary>
+        public static string VoteStatus()
+        {
+            if (!Active || !Game.InRun || (Votes.Count == 0 && !_awaitingChoice)) return null;
+            var missing = Net.Players.Where(p => !Votes.ContainsKey(p.Id)).Select(p => $"<color={p.Color}>{p.Name}</color>").ToList();
             float left = ResolveAt - Time.unscaledTime;
-            string status = left > 0 ? $"Tout le monde a voté : départ dans {Math.Ceiling(left):0} s… (clique ailleurs pour changer ton vote)"
-                          : away.Count > 0 ? "En attente de " + string.Join(", ", away) + " (pas encore sur la carte)"
-                          : Votes.Count == 0 ? (_currentOptions.Count == 1 ? "Un seul chemin : clique pour voter, vous partirez ensemble" : "Plusieurs chemins : clique sur la case de ton choix pour voter")
-                          : missing.Count > 0 ? "Votes manquants : " + string.Join(", ", missing) : "";
-            if (status != "") GUI.Box(new Rect(Screen.width / 2f - 290, Screen.height - 46, 580, 28), status);
+            if (left > 0) return $"Tout le monde a voté : départ dans {Math.Ceiling(left):0} s\n<color=#e9cfae>Clique sur une autre case pour changer ton vote</color>";
+            if (Votes.Count == 0)
+                return _currentOptions.Count == 1 ? "Un seul chemin : clique dessus pour voter, vous partirez ensemble"
+                                                  : "Choisissez le chemin : clique sur une case pour voter";
+            return missing.Count > 0 ? "En attente du vote de " + string.Join(", ", missing) : null;
         }
 
         public static void EndLocalClick() { if (ClickDepth > 0) ClickDepth--; }
@@ -704,7 +697,7 @@ namespace DiceMultiplayer.Sync
             bool nowReady = !_ready.Contains(LocalId);
             Send(new Msg { t = T.Ready, turn = Game.Turn, flag = nowReady });
             OnReady(LocalId, Game.Turn, nowReady);
-            Toast(nowReady ? "Prêt ! En attente des autres joueurs…" : "Tu n'es plus prêt");
+            Toast(nowReady ? "Prêt ! En attente des autres joueurs" : "Tu n'es plus prêt");
             return false;
         }
 
@@ -738,7 +731,7 @@ namespace DiceMultiplayer.Sync
                         if (img != null) _btnOriginalColor = img.color;
                         _btnShowingReady = true;
                     }
-                    var label = $"Prêt ✔ ({_ready.Count}/{Net.Players.Count})";
+                    var label = $"Prêt {_ready.Count}/{Net.Players.Count}";
                     if (texts != null) foreach (var t in texts) if (t.text != label) t.text = label;
                     if (img != null)
                     {
@@ -756,18 +749,14 @@ namespace DiceMultiplayer.Sync
             catch { }
         }
 
-        /// <summary>Bandeau « prêt / en attente » (OnGUI, phase Repaint).</summary>
-        public static void DrawReadyBanner()
+        /// <summary>Texte du bandeau « prêt / en attente » (null s'il n'y a rien à afficher).</summary>
+        public static string ReadyStatus()
         {
-            if (!Active || !Game.InBattle || _ready.Count == 0) return;
+            if (!Active || !Game.InBattle || _ready.Count == 0) return null;
             var waiting = Net.Players.Where(p => !_ready.Contains(p.Id)).Select(p => $"<color={p.Color}>{p.Name}</color>").ToList();
-            string text = _ready.Contains(LocalId)
-                ? (waiting.Count > 0 ? $"✔ Tu es prêt — en attente de {string.Join(", ", waiting)}  <size=11>(re-clique pour annuler)</size>" : "✔ Tout le monde est prêt !")
+            return _ready.Contains(LocalId)
+                ? (waiting.Count > 0 ? $"Tu es prêt : en attente de {string.Join(", ", waiting)}\n<color=#e9cfae>Clique à nouveau sur Fin de tour pour annuler</color>" : "Tout le monde est prêt !")
                 : $"{string.Join(", ", _ready.Select(id => $"<color={ColorOf(id)}>{NameOf(id)}</color>"))} {(_ready.Count > 1 ? "sont prêts" : "est prêt")} : à toi de finir ton tour";
-            var r = new Rect(Screen.width / 2f - 260, Screen.height - 120, 520, 32);
-            GUI.Box(r, "");
-            GUI.Box(r, "");
-            GUI.Label(new Rect(r.x + 12, r.y + 6, r.width - 24, 24), $"<size=15><b>{text}</b></size>");
         }
 
         private static void OnReady(int id, int turn, bool ready)
