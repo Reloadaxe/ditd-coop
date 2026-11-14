@@ -1,6 +1,6 @@
 {
-    "version":  "0.5.13",
-    "changelog":  "Coop : corrige la boucle qui relançait la même salle (votes limités aux cases accessibles)",
+    "version":  "0.5.14",
+    "changelog":  "Coop : chemin unique pris automatiquement par tous, vote sur les cases réellement cliquables",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "9b5aed1caa97c9d9f6f25563fb2fe4051f0c62030dbbf0ccab9c8551b0d354e1",
+                      "sha256":  "1a1bc8ee244060b6824f6621b4806f15ec5567f16d15243e43f39ac912555ab2",
                       "size":  50176,
-                      "version":  "0.5.13"
+                      "version":  "0.5.14"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.5.13"
+                      "version":  "0.5.14"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "22e1fbb869d26553815b66af30d507c6a054c141b9ed356535c62849ab7f80c5",
+                      "sha256":  "b8862f3316312b3ed46e481fb9704f6155088eb04ee51ea99af25302e5af8ec9",
                       "size":  10752,
-                      "version":  "0.5.13",
+                      "version":  "0.5.14",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "5119e69dce02d420eaf8d2af7a0e171428855b84e990df4a0c76e41123d998b2",
+                      "sha256":  "921f7474c01f516fb8a24546023ba982cb79bf329600cb560bfa831809a15219",
                       "size":  8704,
-                      "version":  "0.5.13",
+                      "version":  "0.5.14",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "87d9f0212e9ca2aa44b1eaf1ef7975ac3de171fc4c9ebf9f948c310cb489b45d",
-                      "size":  105984,
-                      "version":  "0.5.13"
+                      "sha256":  "6bf9c317a4768ab3ed6e484b02d48aae31f9febfb317d2a828e0fa5c0410df82",
+                      "size":  107008,
+                      "version":  "0.5.14"
                   }
               ],
     "remove":  [

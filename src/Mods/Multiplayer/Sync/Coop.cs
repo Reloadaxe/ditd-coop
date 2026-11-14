@@ -276,13 +276,16 @@ namespace DiceMultiplayer.Sync
         /// </summary>
         public static bool OnMapChangeState(Map.MapState next)
         {
-            if (!Active || next != Map.MapState.MovePlayer) return true;
+            if (!Active) return true;
+            // Arrivée en sélection de case : on propose le choix tout de suite (vote auto si un seul chemin)
+            if (next == Map.MapState.SelectTile) { Game.Schedule(StartChoice, 0.6f); return true; }
+            if (next != Map.MapState.MovePlayer) return true;
             if (Time.unscaledTime < _allowMoveUntil) return true;
             // Destination choisie : dernière case cliquée, sinon le choix enregistré par le jeu (flèches…),
             // sinon la case survolée au moment du clic (sélection par le système Selectable du jeu) — uniquement au début
             // d'un déplacement : en cours de route (pas déjà faits), c'est une suite automatique.
             var map = Game.Map;
-            var options = NextOptions(map, out var optDetail);
+            var options = ClickableOptions(map, out var optDetail);
             var clicked = _lastClicked; var desired = ReadDesired(map); var hovered = HoveredCoord(map);
             bool recentMapClick = Time.unscaledTime - _lastMapClickTime < 3f;
             AddLog($"[vote] Départ demandé : chemins possibles={options.Count} ({optDetail}) clic={Fmt(clicked)} destination={Fmt(desired)} " +
@@ -325,7 +328,7 @@ namespace DiceMultiplayer.Sync
         /// <summary>Vrai tant qu'un vote local peut être émis ou changé (départ bloqué en attente, ou vote déjà émis).</summary>
         private static bool VotingOpen => _awaitingChoice || _myVotePending;
 
-        private static void CastVote(Vector2Int c)
+        private static void CastVote(Vector2Int c, bool auto = false)
         {
             bool change = _myVotePending;
             _awaitingChoice = false;
@@ -334,10 +337,45 @@ namespace DiceMultiplayer.Sync
             Send(vote);
             vote.id = LocalId;
             OnVote(vote);
-            Toast(change ? "Vote changé" : "Vote enregistré : en attente des autres joueurs (re-clique pour changer)");
+            Toast(auto ? "Un seul chemin : départ dès que tout le monde est prêt" : change ? "Vote changé" : "Vote enregistré : en attente des autres joueurs (re-clique pour changer)");
         }
 
         /// <summary>Cases accessibles au prochain pas (Map.NextPlayerTiles, privée dans le jeu).</summary>
+        /// <summary>
+        /// Cases réellement sélectionnables : celles que le jeu marque comme cliquables (VisualMapTile.isClickable,
+        /// celles qui « respirent » à l'écran). Repli sur le calcul des cases suivantes si le jeu n'en marque aucune.
+        /// </summary>
+        private static List<Vector2Int> ClickableOptions(Map map, out string detail)
+        {
+            var clickable = new List<Vector2Int>();
+            foreach (var t in UnityEngine.Object.FindObjectsOfType<VisualMapTile>())
+            {
+                try { if (t != null && t.isClickable && t.gameObject.activeInHierarchy) clickable.Add(t.ActiveTile.CoordVector); }
+                catch { }
+            }
+            var fallback = NextOptions(map, out var nextDetail);
+            detail = $"cliquables=[{string.Join(" ", clickable.Select(c => $"{c.x},{c.y}"))}] {nextDetail}";
+            return clickable.Count > 0 ? clickable.Distinct().ToList() : fallback;
+        }
+
+        /// <summary>
+        /// Arrivée en sélection de case (Map passe en SelectTile) : un seul chemin => voté automatiquement (tout le monde
+        /// part ensemble, sans clic) ; plusieurs chemins => le vote s'ouvre tout de suite chez tous.
+        /// </summary>
+        private static void StartChoice()
+        {
+            if (!Active || !Game.InRun) return;
+            var map = Game.Map;
+            if (map == null || Game.Safe(() => map.CurrentMapState) != Map.MapState.SelectTile) return;
+            if (Time.unscaledTime < _allowMoveUntil) return;
+            var options = ClickableOptions(map, out var detail);
+            _currentOptions = options;
+            AddLog($"[vote] Choix du chemin : {options.Count} case(s) possible(s) ({detail})");
+            if (options.Count == 0) return;
+            if (options.Count == 1) { CastVote(options[0], auto: true); return; }
+            if (!_myVotePending) { _awaitingChoice = true; Toast("Plusieurs chemins : clique sur la case de ton choix pour voter"); }
+        }
+
         /// <summary>
         /// Cases où l'on peut aller au prochain pas : union de Map.NextPlayerTiles(1) et des cases suivantes de la case
         /// où se trouve réellement le joueur (CurrentPlayerTile.ActiveTile.NextTilesCoords). Après une salle, la première
