@@ -577,6 +577,25 @@ namespace DiceMultiplayer.Sync
                 var st = Game.Safe(() => map.CurrentMapState);
                 if (st == Map.MapState.SelectTile) Game.Safe(() => { map.ChangeState(Map.MapState.MovePlayer); return 0; });
             }, 0.3f);
+            // Filet de sécurité : si le déplacement n'a pas démarré (carte restée en sélection, départ du jeu à moitié
+            // engagé…), on le relance une fois, avec une trace de l'état pour le diagnostic
+            Game.Schedule(() => EnsureMoveStarted(map, tile, coord, here), 1.5f);
+        }
+
+        private static void EnsureMoveStarted(Map map, VisualMapTile tile, Vector2Int target, Vector2Int start)
+        {
+            if (!Active || map == null || Game.State != GameManager.GameState.Map) return;
+            var st = Game.Safe(() => map.CurrentMapState);
+            var at = Game.Safe(() => map.CurrentPlayerTile != null ? map.CurrentPlayerTile.ActiveTile.CoordVector : new Vector2Int(-999, -999));
+            bool moving = st == Map.MapState.MovePlayer || st == Map.MapState.TileAction || st == Map.MapState.AfterTileFinish || at != start;
+            AddLog($"[vote] Contrôle du départ : carte={st} case={at.x},{at.y} (départ {start.x},{start.y}, cible {target.x},{target.y}){(moving ? "" : " : déplacement relancé")}");
+            if (moving) return;
+            _allowMoveUntil = Time.unscaledTime + 3f;
+            Game.Safe(() => { map.lastHoveredTile = tile; return 0; });
+            WriteDesired(map, target);
+            WithReplay(() => map.ClickOnMapTile(tile));
+            WriteDesired(map, target);
+            Game.Safe(() => { map.ChangeState(Map.MapState.MovePlayer); return 0; });
         }
 
         /// <summary>

@@ -22,7 +22,7 @@ namespace DiceMultiplayer.Sync
         public static bool IsClient => Coop.Active && !Coop.IsHost;
 
         /// <summary>Le client attend que l'hôte ouvre la sélection : écran d'attente et clics bloqués.</summary>
-        public static bool ClientWaiting => IsClient && !Game.InRun && !SelectionOpen;
+        public static bool ClientWaiting => IsClient && Game.State == GameManager.GameState.TitleScreen && !Game.InRun && !SelectionOpen;
 
         public static void Reset()
         {
