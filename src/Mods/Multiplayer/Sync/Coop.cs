@@ -206,6 +206,18 @@ namespace DiceMultiplayer.Sync
             PendingSeed = null;
             var m = typeof(SeedSystem).GetMethod(nameof(SeedSystem.ForceSeed));
             m.Invoke(seedSystem, new object[] { s });
+
+            // ForceSeed n'écrit que le champ seed. SeedSystem.StartRun a déjà créé ses 4 générateurs statiques à partir
+            // de SA seed : on les recrée comme le jeu le fait (Random(seed + étape)), sinon dés, reliques, récompenses
+            // et potions divergeraient entre les joueurs.
+            try
+            {
+                SeedSystem.DiceRNG = SeedSystem.Rng.GetRandomRng(SeedSystem.Rng.Context.Dice);
+                SeedSystem.RelicRNG = SeedSystem.Rng.GetRandomRng(SeedSystem.Rng.Context.Relic);
+                SeedSystem.RewardRNG = SeedSystem.Rng.GetRandomRng(SeedSystem.Rng.Context.Reward);
+                SeedSystem.PotionRNG = SeedSystem.Rng.GetRandomRng(SeedSystem.Rng.Context.Potion);
+            }
+            catch (Exception e) { AddLog("Générateurs aléatoires non resynchronisés : " + e.Message); }
             AddLog($"Seed synchronisée : {s} (lue après : {ReadSeed(seedSystem)})");
         }
 
