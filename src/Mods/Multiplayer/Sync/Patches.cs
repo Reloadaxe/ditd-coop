@@ -83,6 +83,7 @@ namespace DiceMultiplayer.Sync
             P(h, typeof(GameManager), nameof(GameManager.LoadRun), nameof(LoadRunPrefix));
             P(h, typeof(SeedSystem), nameof(SeedSystem.StartRun), nameof(SeedStartRunPostfix), postfix: true);
             P(h, typeof(ActiveDeck), nameof(ActiveDeck.AddDice), nameof(DeckAddDicePostfix), postfix: true);
+            P(h, typeof(ActiveDeck), nameof(ActiveDeck.RemoveDice), nameof(DeckRemoveDicePrefix));
 
             // 6) Héros multiples : propriétaire des dés, coups ennemis rejoués sur chaque héros, K.O.
             P(h, typeof(GameObjectDice), nameof(GameObjectDice.Init), nameof(DiceInitPrefix));
@@ -198,6 +199,8 @@ namespace DiceMultiplayer.Sync
         private static bool StartRunPrefix(RunInfo.NewRunData __0, ActiveCustomRun __1) => Team.OnLocalStartRun(__0, __1);
 
         private static void DeckAddDicePostfix(ActiveDice __0) => Team.OnDiceAddedToDeck(__0);
+
+        private static void DeckRemoveDicePrefix(ActiveDeck __instance, ActiveDice __0) => Team.OnDiceRemovedFromDeck(__instance, __0);
 
         /// <summary>Un dé tiré pour le héros de l'hôte mais appartenant à un autre joueur reçoit le héros de ce joueur comme propriétaire.</summary>
         private static void DiceInitPrefix(ActiveDice __0, ref Entity __2)

@@ -33,6 +33,7 @@ namespace DiceMultiplayer.Sync
             Picks.Clear();
             RunPicks = new List<PlayerPick>();
             DiceOwners.Clear();
+            DeckOwners.Clear();
             _decksMerged = false;
         }
 
@@ -132,12 +133,14 @@ namespace DiceMultiplayer.Sync
         {
             RunPicks = m.picks ?? new List<PlayerPick>();
             DiceOwners.Clear();
+            DeckOwners.Clear();
             _decksMerged = false;
         }
 
         public static void OnHostTeamRunStarted()
         {
             DiceOwners.Clear();
+            DeckOwners.Clear();
             _decksMerged = false;
         }
 
@@ -147,6 +150,14 @@ namespace DiceMultiplayer.Sync
         /// Appelé à la première arrivée sur la carte. Le deck de l'hôte est déjà chargé : on note ses propriétaires,
         /// puis on ajoute dans l'ordre les decks de départ des autres personnages. C'est déterministe chez tous.
         /// </summary>
+        /// <summary>
+        /// Propriétaire de chaque dé du deck de la run, dans l'ordre de ActiveDeck.dice.
+        /// Les uid ne sont pas fiables : le combat travaille sur des copies remises à 0, sans doute rechargées depuis la sauvegarde.
+        /// L'ordre du deck, lui, est conservé.
+        /// </summary>
+        public static readonly List<int> DeckOwners = new List<int>();
+        private static bool _merging;
+
         public static void MergeDecksIfNeeded()
         {
             if (_decksMerged || !Coop.Active || RunPicks.Count == 0) return;
@@ -154,6 +165,9 @@ namespace DiceMultiplayer.Sync
             var run = Game.Run;
             if (dm == null || run == null || !dm.IsCurrentRunDeckLoaded) return;
             _decksMerged = true;
+            _merging = true;
+            DeckOwners.Clear();
+            foreach (var _ in Game.Deck) DeckOwners.Add(RunPicks[0].Id);
 
             int hostId = RunPicks[0].Id;
             var hostDice = Game.Deck;
@@ -184,6 +198,7 @@ namespace DiceMultiplayer.Sync
                         ad.uid = run.ProvideNewDiceUID();
                         dm.CurrentRunDeck.AddDice(ad);
                         DiceOwners[ad.uid] = p.Id;
+                        DeckOwners.Add(p.Id);
                         added++;
                     }
                     Coop.AddLog($"Deck de {Coop.NameOf(p.Id)} ({(Player.CharacterName)p.Run.Character}) ajouté : {added} dés, uid " +
@@ -191,13 +206,56 @@ namespace DiceMultiplayer.Sync
                 }
                 catch (Exception e) { Coop.AddLog($"Ajout du deck de {Coop.NameOf(p.Id)} impossible : {e.Message}"); }
             }
+            _merging = false;
+            Coop.AddLog($"[diag] Propriétaires du deck : {string.Join("", DeckOwners)}");
         }
 
         /// <summary>Dé ajouté au deck en cours de run (récompense, événement…) : il va au meneur du moment.</summary>
         public static void OnDiceAddedToDeck(ActiveDice d)
         {
-            if (!Coop.Active || d == null || !_decksMerged) return;
+            if (!Coop.Active || d == null || !_decksMerged || _merging) return;
+            DeckOwners.Add(Coop.LeaderId);
             if (!DiceOwners.ContainsKey(d.uid)) DiceOwners[d.uid] = Coop.LeaderId;
+        }
+
+        /// <summary>Préfixe de ActiveDeck.RemoveDice : on retire le propriétaire à la même position.</summary>
+        public static void OnDiceRemovedFromDeck(ActiveDeck deck, ActiveDice d)
+        {
+            if (!Coop.Active || deck == null || d == null || !_decksMerged) return;
+            int i = 0;
+            foreach (var x in deck.dice)
+            {
+                if (x != null && x.Pointer == d.Pointer) { if (i < DeckOwners.Count) DeckOwners.RemoveAt(i); return; }
+                i++;
+            }
+        }
+
+        /// <summary>
+        /// Début de combat : la pioche est construite depuis le deck, dans le même ordre (vérifié par les noms).
+        /// On donne à chaque dé un uid unique (1000 + position) et on enregistre son propriétaire.
+        /// </summary>
+        public static void TagBattlePile()
+        {
+            if (!Coop.Active || !_decksMerged) return;
+            var dm = Game.Dice;
+            var pile = Game.Safe(() => dm.diceInDrawPile.AllDice);
+            var deck = Game.Safe(() => dm.CurrentRunDeck.dice);
+            if (pile == null || deck == null) return;
+            var pileList = new List<ActiveDice>(); foreach (var d in pile) pileList.Add(d);
+            var deckList = new List<ActiveDice>(); foreach (var d in deck) deckList.Add(d);
+            if (pileList.Count == 0) return;
+            bool sameOrder = pileList.Count == deckList.Count;
+            for (int i = 0; sameOrder && i < pileList.Count; i++) sameOrder = pileList[i].diceDataName == deckList[i].diceDataName;
+            var owners = new List<int>();
+            for (int i = 0; i < pileList.Count; i++)
+            {
+                int owner = i < DeckOwners.Count ? DeckOwners[i] : RunPicks[0].Id;
+                int uid = 1000 + i;
+                pileList[i].uid = uid;
+                DiceOwners[uid] = owner;
+                owners.Add(owner);
+            }
+            Coop.AddLog($"[diag] Pioche marquée : {pileList.Count} dés (deck {deckList.Count}, ordre {(sameOrder ? "identique" : "DIFFÉRENT")}), propriétaires {string.Join("", owners)}");
         }
 
         public static int? OwnerOf(int uid) => DiceOwners.TryGetValue(uid, out var o) ? o : (int?)null;

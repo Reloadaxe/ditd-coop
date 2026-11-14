@@ -19,6 +19,7 @@ namespace DiceMultiplayer.Sync
     {
         private static int? _baseDraw;
         private static int _drawIndex;
+        private static bool _pileTagged;
         private static readonly Dictionary<IntPtr, bool> _hidden = new Dictionary<IntPtr, bool>();
 
         private static int Players => Coop.Net?.Players.Count ?? 1;
@@ -34,6 +35,7 @@ namespace DiceMultiplayer.Sync
             if (_baseDraw == null) _baseDraw = dm.diceDrawPerTurn;
             dm.diceDrawPerTurn = _baseDraw.Value * Players;
             _drawIndex = 0;
+            _pileTagged = false;
             Coop.AddLog($"Pioche : {_baseDraw.Value} dés par joueur et par tour ({dm.diceDrawPerTurn} au total).");
             Game.Schedule(() =>
             {
@@ -56,6 +58,11 @@ namespace DiceMultiplayer.Sync
         public static void OnTurnState(BattleSystem.TurnState s)
         {
             if (s == BattleSystem.TurnState.DrawDice || s == BattleSystem.TurnState.StartTurn) _drawIndex = 0;
+            if (!_pileTagged && (s == BattleSystem.TurnState.Intro || s == BattleSystem.TurnState.StartTurn) && Heroes.Enabled)
+            {
+                Team.TagBattlePile();
+                _pileTagged = Game.Safe(() => Game.Dice.diceInDrawPile.DiceAmount) > 0;
+            }
             if (s == BattleSystem.TurnState.SelectDice && Heroes.Enabled)
                 Game.Schedule(() =>
                 {
