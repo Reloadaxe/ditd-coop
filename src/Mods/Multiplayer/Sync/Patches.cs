@@ -99,6 +99,8 @@ namespace DiceMultiplayer.Sync
             P(h, typeof(Map), nameof(Map.ChangeState), nameof(MapChangeStatePrefix));
             // Point de passage de TOUT départ (certains chemins du jeu ne passent pas par ChangeState)
             P(h, typeof(Map), "EnterMovePlayerState", nameof(EnterMovePlayerPrefix));
+            // Un seul pas par départ en coop : sinon un effet propre à un joueur (pas en plus) le fait avancer seul
+            P(h, typeof(Map), "_MoveForward", nameof(MoveForwardPrefix));
             // Entrée clavier/manette (Rewired) qui demande de sélectionner une case nulle : NullReferenceException en boucle
             P(h, typeof(Map), nameof(Map.ForceTileSelectableSelection), nameof(NullTileGuard));
             // Embranchement pendant un déplacement : la flèche choisit la direction sans repasser par ChangeState
@@ -201,6 +203,12 @@ namespace DiceMultiplayer.Sync
         {
             try { return Coop.OnArrowClick(__instance); }
             catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("ArrowClickPrefix : " + e.Message); return true; }
+        }
+
+        private static void MoveForwardPrefix(Map.MoveData __0)
+        {
+            try { Coop.ClampMove(__0); }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("MoveForwardPrefix : " + e.Message); }
         }
 
         private static bool EnterMovePlayerPrefix()

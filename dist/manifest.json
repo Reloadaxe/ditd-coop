@@ -1,6 +1,6 @@
 {
-    "version":  "0.9.4",
-    "changelog":  "Écran d\u0027attente limité à l\u0027écran titre ; départ voté relancé s\u0027il ne démarre pas",
+    "version":  "0.9.5",
+    "changelog":  "Carte : un seul pas par départ en coop, chaque case suivante se vote",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "94237a9e452a8ba2f05c80bc3801f5ef9ac6651efcdf2d1a1ee352a047a2017b",
+                      "sha256":  "52c1104a09be66332aa18a132a25ea4a0cfaf2bbfbf57ae70e24d71cd432fc81",
                       "size":  50176,
-                      "version":  "0.9.4"
+                      "version":  "0.9.5"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.9.4"
+                      "version":  "0.9.5"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "d4af74475b36314b2df9865d72d1c9aefd1d88e43bc239b8b104241baaf8c135",
+                      "sha256":  "d2524a2f233cdc707cf196c3c5dcf7b435eaa2cef9ca642a44a6dc2435832af5",
                       "size":  10752,
-                      "version":  "0.9.4",
+                      "version":  "0.9.5",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "c2a244fe73f43635a456c66496248c469646eab298e172caf20cbe7198cc1c03",
+                      "sha256":  "998590c346ae0f87263516293814cd3685b1216dd4ddb4cf6e1d98f6df8ac6fa",
                       "size":  8704,
-                      "version":  "0.9.4",
+                      "version":  "0.9.5",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "696ecf11f8ba5622e362d997c6da040614d042538a7609f9d0b6718fd4724169",
-                      "size":  158720,
-                      "version":  "0.9.4"
+                      "sha256":  "30f544e9bcc8b66c303d57a8e46826c5d8398d43c7b95a837ef8e722eede9380",
+                      "size":  159744,
+                      "version":  "0.9.5"
                   }
               ],
     "remove":  [

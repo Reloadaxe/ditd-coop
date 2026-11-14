@@ -297,6 +297,20 @@ namespace DiceMultiplayer.Sync
             return ok;
         }
 
+        /// <summary>
+        /// Préfixe de Map._MoveForward : un déplacement peut compter plusieurs pas (relique, effet de case…) et traverse
+        /// alors les cases sans s'arrêter. Ces effets étant propres à chaque joueur, l'un partait plus loin que les autres.
+        /// En coop, chaque départ fait exactement un pas : la case suivante repasse par le vote chez tout le monde.
+        /// </summary>
+        public static void ClampMove(Map.MoveData move)
+        {
+            if (!Active || move == null) return;
+            int spent = move.movesSpent, total = move.totalAmountOfMoves;
+            if (total <= spent + 1) return;
+            move.totalAmountOfMoves = spent + 1;
+            AddLog($"[vote] Déplacement de {total - spent} pas ramené à 1 (le suivant se vote).");
+        }
+
         /// <summary>Un départ a été bloqué dans EnterMovePlayerState (la carte attend en état « déplacement »).</summary>
         private static bool _moveBlockedInside;
 
