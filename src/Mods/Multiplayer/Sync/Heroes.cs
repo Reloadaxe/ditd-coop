@@ -30,6 +30,8 @@ namespace DiceMultiplayer.Sync
             public bool KO;
             public float LastUpdate;
             public TMPro.TMP_Text HpText, BlockText;
+            /// <summary>Tous les textes pilotés par le CustomText (chiffre, ombre, contour…) : on les met tous à jour.</summary>
+            public List<TMPro.TMP_Text> HpTexts = new List<TMPro.TMP_Text>(), BlockTexts = new List<TMPro.TMP_Text>();
             public GameObject BlockParent;
             public bool HpWithMax;
             public string ShownHp, ShownBlock;
@@ -108,13 +110,13 @@ namespace DiceMultiplayer.Sync
                     if (r.HpText != null)
                     {
                         var s = r.HpWithMax ? $"{r.Hp}/{r.MaxHp}" : r.Hp.ToString();
-                        if (s != r.ShownHp) { r.HpText.text = s; r.ShownHp = s; }
+                        if (s != r.ShownHp || (r.HpTexts.Count > 0 && r.HpTexts[0].text != s)) { SetAll(r.HpTexts, s); r.ShownHp = s; }
                     }
                     if (r.BlockParent != null && r.BlockParent.activeSelf != (r.Block > 0)) r.BlockParent.SetActive(r.Block > 0);
                     if (r.BlockText != null)
                     {
                         var b = r.Block.ToString();
-                        if (b != r.ShownBlock) { r.BlockText.text = b; r.ShownBlock = b; }
+                        if (b != r.ShownBlock || (r.BlockTexts.Count > 0 && r.BlockTexts[0].text != b)) { SetAll(r.BlockTexts, b); r.ShownBlock = b; }
                     }
                 }
                 catch { }
@@ -148,7 +150,9 @@ namespace DiceMultiplayer.Sync
                 if (ec != null)
                 {
                     r.HpText = Tmp(Game.Safe(() => ec.healthText));
+                    r.HpTexts = AllTmp(Game.Safe(() => ec.healthText));
                     r.BlockText = Tmp(Game.Safe(() => ec.blockText));
+                    r.BlockTexts = AllTmp(Game.Safe(() => ec.blockText));
                     r.BlockParent = Game.Safe(() => ec.parentBlock)?.gameObject;
                     foreach (var mk in new[] { Game.Safe(() => ec.attackMarker), Game.Safe(() => ec.blockMarker), Game.Safe(() => ec.healMarker),
                                                Game.Safe(() => ec.boostMarker), Game.Safe(() => ec.currentBoostMarker) })
@@ -202,10 +206,34 @@ namespace DiceMultiplayer.Sync
                 go.SetActive(true);
                 r.Go = go;
                 Coop.AddLog($"Héros de {Coop.NameOf(pick.Id)} affiché ({(Player.CharacterName)pick.Run.Character}). " +
-                            $"[diag] UI de vie : texte PV {(r.HpText != null ? $"trouvé (« {Game.Safe(() => r.HpText.text)} », objet {r.HpText.name})" : "INTROUVABLE")}, " +
+                            $"[diag] UI de vie : {r.HpTexts.Count} texte(s) PV ({string.Join(", ", r.HpTexts.Select(t => $"{t.name}=«{Game.Safe(() => t.text)}»"))}), " +
                             $"bloc {(r.BlockText != null ? "trouvé" : "introuvable")}, format local {(r.HpWithMax ? "pv/max" : "pv")}");
             }
             catch (Exception e) { Coop.AddLog($"Affichage du héros de {Coop.NameOf(pick.Id)} impossible : {e.Message}"); }
+        }
+
+        /// <summary>Tous les textes TextMeshPro sous un CustomText (le jeu peut en piloter plusieurs : chiffre, ombre, contour).</summary>
+        private static List<TMPro.TMP_Text> AllTmp(CustomText ct)
+        {
+            var list = new List<TMPro.TMP_Text>();
+            if (ct == null) return list;
+            var arr = Game.Safe(() => ct.GetComponentsInChildren<TMPro.TMP_Text>(true));
+            if (arr != null) foreach (var t in arr) if (t != null) list.Add(t);
+            return list;
+        }
+
+        private static void SetAll(List<TMPro.TMP_Text> texts, string value)
+        {
+            foreach (var t in texts)
+            {
+                try
+                {
+                    t.text = value;
+                    t.SetAllDirty();
+                    t.ForceMeshUpdate(true, true);
+                }
+                catch { }
+            }
         }
 
         /// <summary>Texte TextMeshPro piloté par un CustomText du jeu (sur le même objet ou un enfant).</summary>
