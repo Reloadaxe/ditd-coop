@@ -1,6 +1,6 @@
 {
-    "version":  "0.2.6",
-    "changelog":  "Pseudos J1/J2 pour le test à 2 fenêtres ; diagnostic du plantage Attack",
+    "version":  "0.2.7",
+    "changelog":  "Correctif du plantage Attack en combat (initialisation statique forcée au chargement)",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "cc91920f845d6bc15b089240b6d3e6bc1ea9f094228d16ba544c4604c4b4e37c",
+                      "sha256":  "65cf1a90c5a9fbaae2547958680336d68eb7af937bb44aaca029b641d0184df6",
                       "size":  50176,
-                      "version":  "0.2.6"
+                      "version":  "0.2.7"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.2.6"
+                      "version":  "0.2.7"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "7897be4a3cd03d48fa77de78c120879b99cbfeccec38d52602d911c8cfac9b25",
+                      "sha256":  "12c1d560dc3127b4df872c5501cb02c704f8344afd5bd473ea670bea316b86d9",
                       "size":  10752,
-                      "version":  "0.2.6",
+                      "version":  "0.2.7",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "338ccf8b0065acca31853afa496b94541ea8b7da3cd8f8ea1b7b2cd90bfa7695",
+                      "sha256":  "82daf3f30bd7223274db1d1efa0b0251f8a41f18af64b046f91be86e60e33df9",
                       "size":  8704,
-                      "version":  "0.2.6",
+                      "version":  "0.2.7",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "5cebc3bf80a84db742a9d4d50eb456952dc2d9db026ab2a66f98fd516d298f83",
-                      "size":  72704,
-                      "version":  "0.2.6"
+                      "sha256":  "6377f16d46e92dee3e2660c23feede07890badb5655801dc1cdc93f35fc46797",
+                      "size":  71168,
+                      "version":  "0.2.7"
                   }
               ],
     "remove":  [
