@@ -287,7 +287,7 @@ namespace DiceMultiplayer.Sync
                 if (board != null && slot != null) try { board.RemoveDiceFromSlot(slot, dice); } catch { }
                 if (slot != null) try { slot.RemoveDice(); } catch { }
                 var hand = UnityEngine.Object.FindObjectOfType<HandUI>();
-                if (hand != null) try { hand.RemoveDice(dice); } catch { }
+                if (hand != null) { try { hand.RemoveDice(dice); } catch { } PurgeHand(hand, dice.Pointer); }
                 if (dm != null && ad != null) Purge(dm, ad);
                 dice.gameObject.SetActive(false);
                 UnityEngine.Object.Destroy(dice.gameObject);
@@ -299,6 +299,41 @@ namespace DiceMultiplayer.Sync
                 try { board.RefreshActiveBoardSlots(); } catch { }
                 try { board.RecalculateAllBattleValues(); } catch { }
             }
+        }
+
+        /// <summary>
+        /// Retire un dé (pointeur donné, ou IntPtr.Zero pour seulement les entrées détruites) des listes internes de la
+        /// main (HandUI.gameObjectDicePool et activeGameObjectDice). HandUI.FloorEnd les parcourt pour les détruire :
+        /// une copie déjà détruite y provoquait une NullReferenceException qui interrompait le chargement de la salle
+        /// suivante (écran violet).
+        /// </summary>
+        public static int PurgeHand(HandUI hand, IntPtr dice)
+        {
+            int removed = 0;
+            if (hand == null) return 0;
+            foreach (var list in new[] { Game.Safe(() => hand.gameObjectDicePool), Game.Safe(() => hand.activeGameObjectDice) })
+            {
+                if (list == null) continue;
+                try
+                {
+                    for (int i = list.Count - 1; i >= 0; i--)
+                    {
+                        var d = list[i];
+                        bool dead = d == null || d.WasCollected;
+                        if (!dead) { try { dead = d.gameObject == null; } catch { dead = true; } }
+                        if (dead || (dice != IntPtr.Zero && d.Pointer == dice)) { list.RemoveAt(i); removed++; }
+                    }
+                }
+                catch { }
+            }
+            return removed;
+        }
+
+        /// <summary>Préfixe de HandUI.FloorEnd : nettoie les dés détruits restés dans les listes de la main.</summary>
+        public static void BeforeHandFloorEnd(HandUI hand)
+        {
+            int n = PurgeHand(hand, IntPtr.Zero);
+            if (n > 0) MultiplayerMod.Instance.Logger.LogInfo($"Fin d'étage : {n} dé(s) détruit(s) retiré(s) de la main.");
         }
 
         /// <summary>Retire le dé copié de toutes les listes du DiceManager (il ne m'appartient pas).</summary>

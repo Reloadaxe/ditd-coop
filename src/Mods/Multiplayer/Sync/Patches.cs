@@ -79,6 +79,7 @@ namespace DiceMultiplayer.Sync
             // Dés des autres posés en vrai dans mes cases : leurs actions ne comptent pas chez moi, et ils ne vont pas dans ma défausse
             P(h, typeof(BoardSlot), nameof(BoardSlot.GetBattleActions), nameof(GhostActionsPostfix), postfix: true);
             P(h, typeof(BattleBoard), nameof(BattleBoard.DiscardAllDice), nameof(DiscardAllPrefix));
+            P(h, typeof(HandUI), nameof(HandUI.FloorEnd), nameof(HandFloorEndPrefix));
             // Les dés des autres sont verrouillés : ni clic, ni sélection, ni déplacement
             foreach (var mn in new[] { "OnDicePointerDown", "OnDicePointerClick", "OnCustomPointerClick", "OnLeftClick", "OnRightClick" })
                 P(h, typeof(GameObjectDice), mn, nameof(GhostDiceInputPrefix));
@@ -124,7 +125,11 @@ namespace DiceMultiplayer.Sync
 
             // Plusieurs fenêtres sur le même PC (-ditd-player autre que J1) : fichier de sauvegarde propre à l'instance,
             // sinon les deux jeux écrivent le même fichier en même temps (échec de sauvegarde, chargement de salle bloqué)
-            if (LocalInstanceSuffix != null) P(h, typeof(SaveDataManager), "GetSaveFileName", nameof(SaveFilePostfix), postfix: true);
+            if (LocalInstanceSuffix != null)
+            {
+                P(h, typeof(SaveDataManager), "GetSaveFileName", nameof(SaveFilePostfix), postfix: true);
+                P(h, typeof(SaveDataManager), "GetSavePath", nameof(SaveFilePostfix), postfix: true);
+            }
 
             // Pas de tutoriel en coop (il bloquerait la partie d'un seul joueur)
             // (get_AreTutorialsActive est exclu : sa fonction native est partagée avec 7 autres getters du jeu)
@@ -227,13 +232,17 @@ namespace DiceMultiplayer.Sync
             try
             {
                 if (string.IsNullOrEmpty(__result) || LocalInstanceSuffix == null) return;
+                // Nom seul (GetSaveFileName) ou chemin complet (GetSavePath) ; jamais deux fois le suffixe
                 var original = __result;
-                var mine = Path.GetFileNameWithoutExtension(original) + "_" + LocalInstanceSuffix + Path.GetExtension(original);
-                var dir = UnityEngine.Application.persistentDataPath;
-                var src = Path.Combine(dir, original);
-                var dst = Path.Combine(dir, mine);
+                var name = Path.GetFileNameWithoutExtension(original);
+                if (name.EndsWith("_" + LocalInstanceSuffix)) return;
+                var folder = Path.GetDirectoryName(original);
+                var mineName = name + "_" + LocalInstanceSuffix + Path.GetExtension(original);
+                var dir = string.IsNullOrEmpty(folder) ? UnityEngine.Application.persistentDataPath : folder;
+                var src = Path.Combine(dir, Path.GetFileName(original));
+                var dst = Path.Combine(dir, mineName);
                 if (!File.Exists(dst) && File.Exists(src)) File.Copy(src, dst);
-                __result = mine;
+                __result = string.IsNullOrEmpty(folder) ? mineName : dst;
             }
             catch { }
         }
@@ -339,6 +348,11 @@ namespace DiceMultiplayer.Sync
                     __result = new Il2CppSystem.Collections.Generic.List<BattleSystem.BattleAction>();
             }
             catch { }
+        }
+
+        private static void HandFloorEndPrefix(HandUI __instance)
+        {
+            try { Board.BeforeHandFloorEnd(__instance); } catch { }
         }
 
         private static void DiscardAllPrefix()

@@ -1,6 +1,6 @@
 {
-    "version":  "0.9.6",
-    "changelog":  "Test à 2 fenêtres : sauvegarde séparée pour J2 (corrige l\u0027écran violet) ; mode de test automatique",
+    "version":  "0.9.7",
+    "changelog":  "Écran violet corrigé : les copies des dés des autres ne restent plus dans la main du jeu",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "6b71646b29604214adc08f59eecf4c221d02c10c1875240dee93b60925e23097",
+                      "sha256":  "d9549384cc08fdd20aba10d291080d1f3fcac01e84c450c5aca23d32b80eb590",
                       "size":  50176,
-                      "version":  "0.9.6"
+                      "version":  "0.9.7"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.9.6"
+                      "version":  "0.9.7"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "3d4fd1f4c641a6a6b058afc6fc8a0522eab5456a57aed5f8ca7020110accdeb6",
+                      "sha256":  "f5f9bd271e9169b61153621bec6de4b2158a9e172dc4f10bd852bed0722d7b23",
                       "size":  10752,
-                      "version":  "0.9.6",
+                      "version":  "0.9.7",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "2346b29ba478418f793c0cdb6f337cbfc810c3a6b66561d0c6182fb80c16d017",
+                      "sha256":  "d0a249b278405681f73913cb4336c71605ccead76ea1edbc6d92564f6040fc65",
                       "size":  8704,
-                      "version":  "0.9.6",
+                      "version":  "0.9.7",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "ddd3ff0539cd766d58fc0a539cfec730d4eac0ffa949afe1608b612ff28d28b0",
-                      "size":  165888,
-                      "version":  "0.9.6"
+                      "sha256":  "1be1562bdd720a4b7467a93e359fd2e137f4865f24c535a21a02c5dfe0b40301",
+                      "size":  166912,
+                      "version":  "0.9.7"
                   }
               ],
     "remove":  [
