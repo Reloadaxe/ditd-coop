@@ -60,6 +60,70 @@ namespace DiceMultiplayer.Sync
             finally { ApplyingRemote = false; }
         }
 
+        // ───── Fin d'exécution commune ─────
+        //
+        // Chaque joueur exécute SES dés chez lui ; ses coups arrivent chez les autres par le réseau, un peu plus tard.
+        // Sans attente, un jeu dont les dés n'avaient pas tué les ennemis passait directement à la phase ennemie : les
+        // ennemis encore en vie attaquaient, puis mouraient sous les coups des autres arrivés juste après.
+        // On retient donc la phase ennemie (EnemyPhaseAfterPlayer) jusqu'à ce que tous les joueurs aient fini d'exécuter
+        // leurs dés (message ExecDone, envoyé après leurs coups), plus un court délai pour appliquer les derniers coups.
+
+        private static readonly Dictionary<string, HashSet<int>> _execDone = new Dictionary<string, HashSet<int>>();
+        private static readonly Dictionary<string, float> _execLast = new Dictionary<string, float>();
+        private static BattleSystem _pendingBattle;
+        private static string _pendingKey;
+        private static float _pendingSince;
+        private static bool _releasing;
+        private const float ExecGrace = 0.6f, ExecTimeout = 8f;
+
+        private static string ExecKey(int floor, int turn) => $"{floor}:{turn}";
+
+        private static void MarkDone(string key, int id)
+        {
+            if (!_execDone.TryGetValue(key, out var set)) _execDone[key] = set = new HashSet<int>();
+            set.Add(id);
+            _execLast[key] = UnityEngine.Time.unscaledTime;
+        }
+
+        private static bool AllDone(string key) =>
+            _execDone.TryGetValue(key, out var set) && Coop.Net.Players.All(p => set.Contains(p.Id));
+
+        public static void OnRemoteExecDone(Msg m) => MarkDone(ExecKey(m.uid, m.turn), m.id);
+
+        /// <summary>Préfixe de BattleSystem.ChangeState : retient l'entrée en phase ennemie après l'exécution des dés.</summary>
+        public static bool OnBattleChangeState(BattleSystem battle, BattleSystem.TurnState next)
+        {
+            if (!Coop.Active || _releasing || next != BattleSystem.TurnState.EnemyPhaseAfterPlayer) return true;
+            if (Coop.Net.Players.Count < 2) return true;
+            var key = ExecKey(MultiplayerMod.CurrentFloorKey, Game.Turn);
+            MarkDone(key, Coop.LocalId);
+            Coop.Send(new Msg { t = T.ExecDone, uid = MultiplayerMod.CurrentFloorKey, turn = Game.Turn });
+            _pendingBattle = battle;
+            _pendingKey = key;
+            _pendingSince = UnityEngine.Time.unscaledTime;
+            return false;   // reprise dans UpdateExecWait
+        }
+
+        /// <summary>Chaque frame : relance la phase ennemie quand tout le monde a fini (ou après le délai maximum).</summary>
+        public static void UpdateExecWait()
+        {
+            if (_pendingBattle == null) return;
+            float now = UnityEngine.Time.unscaledTime;
+            bool ready = AllDone(_pendingKey) && now - _execLast[_pendingKey] >= ExecGrace;
+            bool timeout = now - _pendingSince > ExecTimeout;
+            if (!ready && !timeout) return;
+            var battle = _pendingBattle;
+            _pendingBattle = null;
+            if (timeout && !ready) Coop.AddLog("[sync] Fin d'exécution des autres joueurs non reçue : phase ennemie lancée quand même.");
+            // Le combat a pu se terminer entre-temps (derniers ennemis tués par les autres) : rien à relancer
+            var st = Game.Safe(() => battle.CurrentTurnState);
+            if (st != BattleSystem.TurnState.ExecuteDice) return;
+            _releasing = true;
+            try { battle.ChangeState(BattleSystem.TurnState.EnemyPhaseAfterPlayer); }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("Reprise de la phase ennemie : " + e.Message); }
+            finally { _releasing = false; }
+        }
+
         // ───── Statuts des ennemis (poison, faiblesse…) ─────
 
         /// <summary>Phases où ce sont MES dés (ou mes runes) qui agissent : un statut posé alors vient de moi.</summary>

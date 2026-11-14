@@ -92,6 +92,8 @@ namespace DiceMultiplayer.Sync
 
             // 4) Ennemis partagés : mes dégâts sont envoyés aux autres
             P(h, typeof(Enemy), "_Damage", nameof(EnemyDamagePostfix), postfix: true);
+            // Phase ennemie retenue tant que les autres joueurs n'ont pas fini d'exécuter leurs dés
+            P(h, typeof(BattleSystem), nameof(BattleSystem.ChangeState), nameof(BattleChangeStatePrefix));
             // Statuts posés sur les ennemis (poison, faiblesse…) : partagés
             P(h, typeof(Entity), nameof(Entity.AddModifier), nameof(AddModifierPrefix));
 
@@ -366,6 +368,12 @@ namespace DiceMultiplayer.Sync
         {
             try { Combat.OnEnemyDamaged(__instance, __0); }
             catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("EnemyDamagePostfix : " + e.Message); }
+        }
+
+        private static bool BattleChangeStatePrefix(BattleSystem __instance, BattleSystem.TurnState __0)
+        {
+            try { return Combat.OnBattleChangeState(__instance, __0); }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("BattleChangeStatePrefix : " + e.Message); return true; }
         }
 
         private static void AddModifierPrefix(Entity __instance, ModifierData __0)

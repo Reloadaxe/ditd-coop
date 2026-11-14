@@ -13,7 +13,7 @@ namespace DiceMultiplayer
     /// Mod multijoueur coop (2 ou 3 joueurs) en TCP direct.
     /// Tout le monde joue la même run, synchronisée en lockstep sur les entrées. Voir Sync/Coop.cs.
     /// </summary>
-    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.9.9",
+    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.10.0",
         Author = "DiceModding", Description = "Coop à 2 ou 3 : chacun sa run et son héros, ennemis et plateau partagés (TCP).")]
     public class MultiplayerMod : DiceMod
     {
@@ -72,6 +72,7 @@ namespace DiceMultiplayer
             try { Board.Update(); } catch (Exception e) { Logger.LogDebug("Board : " + e.Message); }
             try { Preview.Update(); } catch (Exception e) { Logger.LogDebug("Preview : " + e.Message); }
             try { Coop.UpdateReadyVisual(); } catch { }
+            try { Combat.UpdateExecWait(); } catch (Exception e) { Logger.LogDebug("ExecWait : " + e.Message); }
 
 
             if (Coop.Active && Time.unscaledTime >= _nextCursor)
@@ -157,6 +158,7 @@ namespace DiceMultiplayer
         private static int _floorKey;
         public override void OnFloorEnd(FloorSystem floor, bool success) => _floorKey++;
         private static int FloorKey() => _floorKey;
+        public static int CurrentFloorKey => _floorKey;
 
         public override void OnRunStart(CurrentRunData run, bool loaded) { _floorKey = 0; Coop.DesyncWarning = null; }
 
