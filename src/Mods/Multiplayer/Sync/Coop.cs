@@ -335,6 +335,8 @@ namespace DiceMultiplayer.Sync
         }
 
         /// <summary>Clé d'un vote : chemin de la flèche choisie, sinon coordonnées de la case.</summary>
+        private static readonly System.Random _voteRng = new System.Random();
+
         private static string Key(Msg v) => !string.IsNullOrEmpty(v.path) ? "flèche:" + v.path : $"{v.sx},{v.sy}";
 
         private static void OnVote(Msg m)
@@ -355,9 +357,12 @@ namespace DiceMultiplayer.Sync
             var groups = Votes.Values.GroupBy(Key).ToList();
             int best = groups.Max(g => g.Count());
             var top = groups.Where(g => g.Count() == best).ToList();
-            var winner = top.FirstOrDefault(g => g.Any(v => v.id == LocalId)) ?? top.OrderBy(g => g.Min(v => v.id)).First();
+            // Égalité : tirage au sort par l'hôte, puis résultat envoyé à tous (tout le monde part vers la même case)
+            var winner = top.Count == 1 ? top[0] : top[_voteRng.Next(top.Count)];
             var choice = winner.First();
-            AddLog($"Chemin choisi : case {Key(choice)} ({best} voix sur {Votes.Count}).");
+            AddLog(top.Count == 1
+                ? $"Chemin choisi : {Key(choice)} ({best} voix sur {Votes.Count})."
+                : $"Égalité ({best} voix chacune) : tirage au sort entre {top.Count} chemins → {Key(choice)}.");
             var go = new Msg { t = T.MapGo, sx = choice.sx, sy = choice.sy, path = choice.path };
             Send(go);
             ExecuteMapGo(go);
@@ -482,13 +487,21 @@ namespace DiceMultiplayer.Sync
                 if (anchor == null) continue;
                 var sp = Board.ScreenPos(anchor);
                 if (sp == null) continue;
-                // Un petit point de la couleur de chaque votant, à côté de la case (jusqu'à 3)
-                float gx = sp.Value.x + 26, gy = Screen.height - sp.Value.y - 34;
-                int i = 0;
-                foreach (var v in grp.OrderBy(v => v.id))
+                // Une pastille de la couleur de chaque votant (jusqu'à 3), au-dessus de la case et non sur son sprite :
+                // fond sombre + contour noir pour rester lisible sur n'importe quel décor
+                var voters = grp.OrderBy(v => v.id).ToList();
+                const float dot = 22f, gap = 4f;
+                float total = voters.Count * dot + (voters.Count - 1) * gap;
+                float gx = sp.Value.x - total / 2f, gy = Screen.height - sp.Value.y - 78;
+                var bg = new Rect(gx - 5, gy - 3, total + 10, dot + 6);
+                GUI.Box(bg, ""); GUI.Box(bg, "");
+                for (int i = 0; i < voters.Count; i++)
                 {
-                    GUI.Label(new Rect(gx + i * 15, gy, 22, 24), $"<size=20><color={ColorOf(v.id)}>●</color></size>");
-                    i++;
+                    float x = gx + i * (dot + gap);
+                    // contour : la pastille noire légèrement décalée dans 4 directions, puis la couleur par-dessus
+                    foreach (var o in new[] { (-1.5f, 0f), (1.5f, 0f), (0f, -1.5f), (0f, 1.5f) })
+                        GUI.Label(new Rect(x + o.Item1 - 2, gy + o.Item2 - 5, dot + 8, dot + 8), "<size=26><color=#000000>●</color></size>");
+                    GUI.Label(new Rect(x - 2, gy - 5, dot + 8, dot + 8), $"<size=26><color={ColorOf(voters[i].id)}>●</color></size>");
                 }
             }
             var missing = Net.Players.Where(p => !Votes.ContainsKey(p.Id)).Select(p => p.Name).ToList();
