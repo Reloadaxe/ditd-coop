@@ -217,9 +217,18 @@ namespace DiceMultiplayer.Sync
         /// Patch préfixe posé sur les OnPointerClick du jeu et de l'UI Unity. En coop, il ne sert plus qu'au lobby
         /// (écran d'attente du client). En run, chacun clique chez soi : le chemin passe par le vote (Map.ClickOnMapTile).
         /// </summary>
+        /// <summary>Diagnostic : type et nom du dernier objet cliqué (pour savoir par où passe le choix du chemin).</summary>
+        private static string _lastClickInfo = "—";
+
         public static bool OnLocalClick(Il2CppObjectBase instance, PointerEventData data, MethodBase original)
         {
             if (!Active || Replaying) return true;
+            try
+            {
+                var c = instance.TryCast<Component>();
+                if (c != null) _lastClickInfo = $"{Game.Safe(() => c.GetIl2CppType().Name)} « {c.gameObject.name} »";
+            }
+            catch { }
             if (!Game.InRun && Lobby.ClientWaiting) { Toast("En attente de l'hôte…"); return false; }
             return true;
         }
@@ -255,7 +264,7 @@ namespace DiceMultiplayer.Sync
             // d'un déplacement : en cours de route (pas déjà faits), c'est une suite automatique.
             var map = Game.Map;
             var clicked = _lastClicked; var desired = ReadDesired(map); var hovered = HoveredCoord(map); int spent = MovesSpent(map);
-            AddLog($"[vote] Départ demandé : clic={Fmt(clicked)} destination={Fmt(desired)} survol={Fmt(hovered)} pas faits={spent}");
+            AddLog($"[vote] Départ demandé : clic={Fmt(clicked)} destination={Fmt(desired)} survol={Fmt(hovered)} pas faits={spent} dernier clic={_lastClickInfo}");
             var target = clicked ?? desired;
             if (target == null && spent == 0) target = hovered;
             if (target == null) { AddLog("[vote] Départ sans destination choisie (suite automatique) : laissé passer."); return true; }
@@ -268,7 +277,8 @@ namespace DiceMultiplayer.Sync
             return false;
         }
 
-        private static string Key(Msg v) => $"{v.sx},{v.sy}";
+        /// <summary>Clé d'un vote : chemin de la flèche choisie, sinon coordonnées de la case.</summary>
+        private static string Key(Msg v) => !string.IsNullOrEmpty(v.path) ? "flèche:" + v.path : $"{v.sx},{v.sy}";
 
         private static void OnVote(Msg m)
         {
@@ -281,7 +291,8 @@ namespace DiceMultiplayer.Sync
         public static void TryResolveVote()
         {
             if (!Active || !IsHost || Votes.Count == 0) return;
-            if (NotOnMap.Any() || Net.Players.Any(p => !Votes.ContainsKey(p.Id))) return;
+            // On vote là où le jeu propose le choix (carte, ou juste après un combat) : seul compte que tout le monde ait voté
+            if (Net.Players.Any(p => !Votes.ContainsKey(p.Id))) return;
 
             // Majorité ; en cas d'égalité, le choix de l'hôte s'il en fait partie, sinon celui du plus petit id
             var groups = Votes.Values.GroupBy(Key).ToList();
@@ -290,7 +301,7 @@ namespace DiceMultiplayer.Sync
             var winner = top.FirstOrDefault(g => g.Any(v => v.id == LocalId)) ?? top.OrderBy(g => g.Min(v => v.id)).First();
             var choice = winner.First();
             AddLog($"Chemin choisi : case {Key(choice)} ({best} voix sur {Votes.Count}).");
-            var go = new Msg { t = T.MapGo, sx = choice.sx, sy = choice.sy };
+            var go = new Msg { t = T.MapGo, sx = choice.sx, sy = choice.sy, path = choice.path };
             Send(go);
             ExecuteMapGo(go);
         }
@@ -298,6 +309,19 @@ namespace DiceMultiplayer.Sync
         private static void ExecuteMapGo(Msg m)
         {
             Votes.Clear();
+            // Vote pour une flèche : on rejoue le clic du joueur sur cette flèche, chez tous
+            if (!string.IsNullOrEmpty(m.path))
+            {
+                var arrowGo = GoPath.Find(m.path);
+                var arrow = arrowGo != null ? arrowGo.GetComponent<MapTileArrow>() : null;
+                if (arrow == null) { AddLog($"[vote] Flèche introuvable chez toi : {m.path}"); return; }
+                AddLog("[vote] Départ par la flèche choisie.");
+                _allowMoveUntil = Time.unscaledTime + 3f;
+                _lastClicked = null;
+                var ped = new PointerEventData(EventSystem.current) { button = PointerEventData.InputButton.Left, pointerPress = arrowGo, rawPointerPress = arrowGo, pointerEnter = arrowGo, clickCount = 1 };
+                WithReplay(() => arrow.OnPointerClick(ped));
+                return;
+            }
             var tile = FindTile(m.sx, m.sy);
             var map = Game.Map;
             if (tile == null || map == null) { AddLog($"[vote] Case {m.sx},{m.sy} introuvable sur ta carte."); return; }
@@ -320,21 +344,22 @@ namespace DiceMultiplayer.Sync
         }
 
         /// <summary>
-        /// Postfix de MapTileArrow.OnPointerClick : à un embranchement pendant un déplacement, la flèche vient d'écrire
-        /// la destination. On la lit, on l'efface (le jeu continue d'attendre), et elle devient le vote du joueur.
+        /// Préfixe de MapTileArrow.OnPointerClick : l'action de la flèche lance le départ directement, sans écrire de destination
+        /// lisible. On bloque donc le clic et on vote pour CETTE flèche (repérée par son chemin dans la scène, identique chez tous).
+        /// À la résolution, le clic sur la flèche gagnante est rejoué chez tout le monde. Renvoie false pour bloquer.
         /// </summary>
-        public static void OnArrowClicked()
+        public static bool OnArrowClick(MapTileArrow arrow)
         {
-            if (!Active || Replaying || Time.unscaledTime < _allowMoveUntil) return;
-            var map = Game.Map;
-            var d = ReadDesired(map);
-            if (d == null) return;
-            ClearDesired(map);
-            var vote = new Msg { t = T.Vote, sx = d.Value.x, sy = d.Value.y };
+            if (!Active || Replaying || arrow == null || Time.unscaledTime < _allowMoveUntil) return true;
+            var path = GoPath.Of(arrow.gameObject);
+            var parentTile = Game.Safe(() => arrow.GetComponentInParent<VisualMapTile>());
+            var coord = parentTile != null ? Game.Safe(() => parentTile.ActiveTile.CoordVector) : new Vector2Int(-999, -999);
+            var vote = new Msg { t = T.Vote, path = path, sx = coord.x, sy = coord.y };
             Send(vote);
             vote.id = LocalId;
             OnVote(vote);
             Toast("Vote enregistré : en attente des autres joueurs");
+            return false;
         }
 
         private static string Fmt(Vector2Int? v) => v == null ? "—" : $"{v.Value.x},{v.Value.y}";
@@ -388,13 +413,15 @@ namespace DiceMultiplayer.Sync
         /// <summary>Affiche les votes au-dessus des cases (OnGUI, phase Repaint).</summary>
         public static void DrawVotes()
         {
-            if (!Active || Game.State != GameManager.GameState.Map || !Game.InRun) return;
+            if (!Active || !Game.InRun || Votes.Count == 0) return;
             foreach (var grp in Votes.Values.GroupBy(Key))
             {
                 var first = grp.First();
-                var tile = FindTile(first.sx, first.sy);
-                if (tile == null) continue;
-                var sp = Board.ScreenPos(tile.transform);
+                Transform anchor = null;
+                if (!string.IsNullOrEmpty(first.path)) anchor = GoPath.Find(first.path)?.transform;   // vote pour une flèche
+                if (anchor == null) anchor = FindTile(first.sx, first.sy)?.transform;                // vote pour une case
+                if (anchor == null) continue;
+                var sp = Board.ScreenPos(anchor);
                 if (sp == null) continue;
                 // Un petit point de la couleur de chaque votant, à côté de la case (jusqu'à 3)
                 float gx = sp.Value.x + 26, gy = Screen.height - sp.Value.y - 34;

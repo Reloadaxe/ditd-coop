@@ -86,7 +86,7 @@ namespace DiceMultiplayer.Sync
             // Entrée clavier/manette (Rewired) qui demande de sélectionner une case nulle : NullReferenceException en boucle
             P(h, typeof(Map), nameof(Map.ForceTileSelectableSelection), nameof(NullTileGuard));
             // Embranchement pendant un déplacement : la flèche choisit la direction sans repasser par ChangeState
-            P(h, typeof(MapTileArrow), nameof(MapTileArrow.OnPointerClick), nameof(ArrowClickPostfix), postfix: true);
+            P(h, typeof(MapTileArrow), nameof(MapTileArrow.OnPointerClick), nameof(ArrowClickPrefix));
 
             // Récompenses, reliques, potions et main propres à chaque joueur (ennemis, combat, carte et dés restent communs)
             P(h, typeof(SeedSystem.Rng), nameof(SeedSystem.Rng.GetRandomRng), nameof(PersonalRngPostfix), postfix: true);
@@ -176,10 +176,10 @@ namespace DiceMultiplayer.Sync
 
         private static bool NullTileGuard(VisualMapTile __0) => __0 != null;
 
-        private static void ArrowClickPostfix()
+        private static bool ArrowClickPrefix(MapTileArrow __instance)
         {
-            try { Coop.OnArrowClicked(); }
-            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("ArrowClickPostfix : " + e.Message); }
+            try { return Coop.OnArrowClick(__instance); }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("ArrowClickPrefix : " + e.Message); return true; }
         }
 
         private static bool MapChangeStatePrefix(Map.MapState __0)
