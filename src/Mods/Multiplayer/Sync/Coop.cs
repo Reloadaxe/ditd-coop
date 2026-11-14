@@ -282,10 +282,10 @@ namespace DiceMultiplayer.Sync
             // sinon la case survolée au moment du clic (sélection par le système Selectable du jeu) — uniquement au début
             // d'un déplacement : en cours de route (pas déjà faits), c'est une suite automatique.
             var map = Game.Map;
-            var options = NextOptions(map);
+            var options = NextOptions(map, out var optDetail);
             var clicked = _lastClicked; var desired = ReadDesired(map); var hovered = HoveredCoord(map);
             bool recentMapClick = Time.unscaledTime - _lastMapClickTime < 3f;
-            AddLog($"[vote] Départ demandé : chemins possibles={options.Count} clic={Fmt(clicked)} destination={Fmt(desired)} " +
+            AddLog($"[vote] Départ demandé : chemins possibles={options.Count} ({optDetail}) clic={Fmt(clicked)} destination={Fmt(desired)} " +
                    $"survol={Fmt(hovered)} clic carte récent={recentMapClick} dernier clic={_lastClickInfo}");
 
             // Un seul chemin (ou aucun connu) : rien à décider, tout le monde avance de la même façon
@@ -328,18 +328,35 @@ namespace DiceMultiplayer.Sync
         }
 
         /// <summary>Cases accessibles au prochain pas (Map.NextPlayerTiles, privée dans le jeu).</summary>
-        private static List<Vector2Int> NextOptions(Map map)
+        /// <summary>
+        /// Cases où l'on peut aller au prochain pas : union de Map.NextPlayerTiles(1) et des cases suivantes de la case
+        /// où se trouve réellement le joueur (CurrentPlayerTile.ActiveTile.NextTilesCoords). Après une salle, la première
+        /// source pouvait n'en voir qu'une alors qu'il y avait un vrai choix.
+        /// </summary>
+        private static List<Vector2Int> NextOptions(Map map, out string detail)
         {
-            var list = new List<Vector2Int>();
+            var fromNext = new List<Vector2Int>();
+            var fromTile = new List<Vector2Int>();
+            Vector2Int? here = null;
             try
             {
                 var tiles = map?.NextPlayerTiles(1);
-                if (tiles != null)
-                    foreach (var t in tiles)
-                        if (t != null) list.Add(t.ActiveTile.CoordVector);
+                if (tiles != null) foreach (var t in tiles) if (t != null) fromNext.Add(t.ActiveTile.CoordVector);
             }
-            catch (Exception e) { AddLog("[vote] Cases accessibles illisibles : " + e.Message); }
-            return list.Distinct().ToList();
+            catch { }
+            try
+            {
+                var cur = map?.CurrentPlayerTile;
+                if (cur != null)
+                {
+                    here = cur.ActiveTile.CoordVector;
+                    var next = cur.ActiveTile.NextTilesCoords;
+                    if (next != null) foreach (var c in next) fromTile.Add(c);
+                }
+            }
+            catch { }
+            detail = $"ici={Fmt(here)} prochain pas=[{string.Join(" ", fromNext.Select(c => $"{c.x},{c.y}"))}] suivantes de la case=[{string.Join(" ", fromTile.Select(c => $"{c.x},{c.y}"))}]";
+            return fromNext.Concat(fromTile).Distinct().ToList();
         }
 
         /// <summary>Clé d'un vote : chemin de la flèche choisie, sinon coordonnées de la case.</summary>
