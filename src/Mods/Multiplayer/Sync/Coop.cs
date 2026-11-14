@@ -226,7 +226,21 @@ namespace DiceMultiplayer.Sync
             try
             {
                 var c = instance.TryCast<Component>();
-                if (c != null) _lastClickInfo = $"{Game.Safe(() => c.GetIl2CppType().Name)} « {c.gameObject.name} »";
+                if (c != null)
+                {
+                    var typeName = Game.Safe(() => c.GetIl2CppType().Name) ?? "";
+                    _lastClickInfo = $"{typeName} « {c.gameObject.name} »";
+                    if (MapClickTypes.Contains(typeName) && Game.InRun)
+                    {
+                        _lastMapClickTime = Time.unscaledTime;
+                        // Départ bloqué en attente d'un choix : la case survolée au moment de ce clic devient le vote
+                        if (_awaitingChoice)
+                        {
+                            var h = HoveredCoord(Game.Map);
+                            if (h != null) CastVote(h.Value);
+                        }
+                    }
+                }
             }
             catch { }
             if (!Game.InRun && Lobby.ClientWaiting) { Toast("En attente de l'hôte…"); return false; }
@@ -247,7 +261,12 @@ namespace DiceMultiplayer.Sync
         public static bool OnMapTileClick(VisualMapTile tile)
         {
             if (!Active || tile == null) return true;
-            if (!Replaying) _lastClicked = Game.Safe(() => tile.ActiveTile.CoordVector);
+            if (Replaying) return true;
+            var coord = Game.Safe(() => tile.ActiveTile.CoordVector);
+            _lastClicked = coord;
+            _lastMapClickTime = Time.unscaledTime;
+            // Départ déjà bloqué faute de choix : ce clic est le vote
+            if (_awaitingChoice) { CastVote(coord); return false; }
             return true;
         }
 
@@ -263,18 +282,56 @@ namespace DiceMultiplayer.Sync
             // sinon la case survolée au moment du clic (sélection par le système Selectable du jeu) — uniquement au début
             // d'un déplacement : en cours de route (pas déjà faits), c'est une suite automatique.
             var map = Game.Map;
-            var clicked = _lastClicked; var desired = ReadDesired(map); var hovered = HoveredCoord(map); int spent = MovesSpent(map);
-            AddLog($"[vote] Départ demandé : clic={Fmt(clicked)} destination={Fmt(desired)} survol={Fmt(hovered)} pas faits={spent} dernier clic={_lastClickInfo}");
-            var target = clicked ?? desired;
-            if (target == null && spent == 0) target = hovered;
-            if (target == null) { AddLog("[vote] Départ sans destination choisie (suite automatique) : laissé passer."); return true; }
-            var c = target.Value;
+            var options = NextOptions(map);
+            var clicked = _lastClicked; var desired = ReadDesired(map); var hovered = HoveredCoord(map);
+            bool recentMapClick = Time.unscaledTime - _lastMapClickTime < 3f;
+            AddLog($"[vote] Départ demandé : chemins possibles={options.Count} clic={Fmt(clicked)} destination={Fmt(desired)} " +
+                   $"survol={Fmt(hovered)} clic carte récent={recentMapClick} dernier clic={_lastClickInfo}");
+
+            // Un seul chemin (ou aucun connu) : rien à décider, tout le monde avance de la même façon
+            if (options.Count <= 1) { AddLog("[vote] Un seul chemin possible : départ sans vote."); return true; }
+
+            // Plusieurs chemins : on bloque, chez tout le monde, jusqu'au vote. La case survolée ne compte que si l'on vient
+            // de cliquer sur la carte (sinon c'est un survol ancien, pas un choix).
+            var target = clicked ?? desired ?? (recentMapClick ? hovered : null);
+            if (target == null)
+            {
+                _awaitingChoice = true;
+                Toast("Plusieurs chemins : clique sur la case de ton choix pour voter");
+                return false;
+            }
+            CastVote(target.Value);
+            return false;
+        }
+
+        /// <summary>Attente d'un choix : le départ est bloqué et le prochain clic sur une case devient le vote.</summary>
+        private static bool _awaitingChoice;
+        private static float _lastMapClickTime = -10f;
+        private static readonly HashSet<string> MapClickTypes = new HashSet<string> { "VisualMapTile", "MapTileArrow", "HoverEvents" };
+
+        private static void CastVote(Vector2Int c)
+        {
+            _awaitingChoice = false;
             var vote = new Msg { t = T.Vote, sx = c.x, sy = c.y };
             Send(vote);
             vote.id = LocalId;
             OnVote(vote);
             Toast("Vote enregistré : en attente des autres joueurs");
-            return false;
+        }
+
+        /// <summary>Cases accessibles au prochain pas (Map.NextPlayerTiles, privée dans le jeu).</summary>
+        private static List<Vector2Int> NextOptions(Map map)
+        {
+            var list = new List<Vector2Int>();
+            try
+            {
+                var tiles = map?.NextPlayerTiles(1);
+                if (tiles != null)
+                    foreach (var t in tiles)
+                        if (t != null) list.Add(t.ActiveTile.CoordVector);
+            }
+            catch (Exception e) { AddLog("[vote] Cases accessibles illisibles : " + e.Message); }
+            return list.Distinct().ToList();
         }
 
         /// <summary>Clé d'un vote : chemin de la flèche choisie, sinon coordonnées de la case.</summary>
@@ -309,6 +366,7 @@ namespace DiceMultiplayer.Sync
         private static void ExecuteMapGo(Msg m)
         {
             Votes.Clear();
+            _awaitingChoice = false;
             // Vote pour une flèche : on rejoue le clic du joueur sur cette flèche, chez tous
             if (!string.IsNullOrEmpty(m.path))
             {
@@ -354,6 +412,7 @@ namespace DiceMultiplayer.Sync
             var path = GoPath.Of(arrow.gameObject);
             var parentTile = Game.Safe(() => arrow.GetComponentInParent<VisualMapTile>());
             var coord = parentTile != null ? Game.Safe(() => parentTile.ActiveTile.CoordVector) : new Vector2Int(-999, -999);
+            _awaitingChoice = false;
             var vote = new Msg { t = T.Vote, path = path, sx = coord.x, sy = coord.y };
             Send(vote);
             vote.id = LocalId;
@@ -413,7 +472,7 @@ namespace DiceMultiplayer.Sync
         /// <summary>Affiche les votes au-dessus des cases (OnGUI, phase Repaint).</summary>
         public static void DrawVotes()
         {
-            if (!Active || !Game.InRun || Votes.Count == 0) return;
+            if (!Active || !Game.InRun || (Votes.Count == 0 && !_awaitingChoice)) return;
             foreach (var grp in Votes.Values.GroupBy(Key))
             {
                 var first = grp.First();
@@ -433,9 +492,9 @@ namespace DiceMultiplayer.Sync
                 }
             }
             var missing = Net.Players.Where(p => !Votes.ContainsKey(p.Id)).Select(p => p.Name).ToList();
-            var away = NotOnMap.Select(NameOf).ToList();
+            var away = new List<string>();   // le vote ne dépend plus de l'état « carte »
             string status = away.Count > 0 ? "En attente de " + string.Join(", ", away) + " (pas encore sur la carte)"
-                          : Votes.Count == 0 ? "Clique sur une case pour voter"
+                          : Votes.Count == 0 ? "Plusieurs chemins : clique sur la case de ton choix pour voter"
                           : missing.Count > 0 ? "Votes manquants : " + string.Join(", ", missing) : "";
             if (status != "") GUI.Box(new Rect(Screen.width / 2f - 220, Screen.height - 46, 440, 28), status);
         }
