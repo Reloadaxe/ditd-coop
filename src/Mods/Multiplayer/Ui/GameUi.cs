@@ -417,7 +417,7 @@ namespace DiceMultiplayer.Ui
 
         // ───────────── Champ de saisie ─────────────
 
-        public static TMP_InputField Field(Transform parent, string value, float w = 90, float h = 15, bool numeric = false)
+        public static TMP_InputField Field(Transform parent, string value, float w = 90, float h = 17, bool numeric = false)
         {
             var bg = Image(parent, SprField, null, "Field");
             bg.raycastTarget = true;
@@ -425,7 +425,7 @@ namespace DiceMultiplayer.Ui
             bg.gameObject.SetActive(false);   // pas d'OnEnable avant que tout soit relié
 
             var area = Node("Text Area", bg.transform);
-            Stretch(area, 5, 2, 5, 2);
+            Stretch(area, 9, 3, 9, 3);   // marge intérieure : le texte ne touche pas le cadre
             area.gameObject.AddComponent<RectMask2D>();
             var txt = Node("Text", area);
             Stretch(txt);

@@ -127,7 +127,7 @@ namespace DiceMultiplayer.Ui
             // Hors ligne
             _offline = Group(win);
             var r1 = Row(_offline); Caption(r1, "Pseudo"); _fName = Field(r1, M.PlayerName);
-            var r2 = Row(_offline); Caption(r2, "Port"); _fPort = Field(r2, M.Port.ToString(), 44, 15, true); Size(_fPort.GetComponent<Image>(), 44, 15, 0);
+            var r2 = Row(_offline); Caption(r2, "Port"); _fPort = Field(r2, M.Port.ToString(), 50, 17, true); Size(_fPort.GetComponent<Image>(), 50, 17, 0);
             Section(_offline, "Héberger");
             Hint(_offline, "Partage ton adresse IP (locale, ou celle de Radmin VPN, ZeroTier, Tailscale) et ouvre le port TCP dans le pare-feu.");
             var r3 = Row(_offline); Button(r3, "Créer la partie", () => M.HostGame(), 96, 18);
@@ -179,7 +179,7 @@ namespace DiceMultiplayer.Ui
         private static void Caption(Transform row, string text)
         {
             var l = Label(row, text, 7, Paper, TextAlignmentOptions.MidlineLeft, false);
-            Size(l.Rect.GetComponent<TextMeshProUGUI>(), 62, 15);
+            Size(l.Rect.GetComponent<TextMeshProUGUI>(), 62, 17);
         }
 
         private static void Section(Transform parent, string text) => Label(parent, text, 7, Gold);
