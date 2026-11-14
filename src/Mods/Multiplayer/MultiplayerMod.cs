@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using BepInEx.Configuration;
 using DiceLoader;
@@ -10,10 +10,10 @@ namespace DiceMultiplayer
 {
     /// <summary>
     /// Mod multijoueur coop (2 ou 3 joueurs) en TCP direct.
-    /// Tout le monde joue la mÃªme run, synchronisÃ©e en lockstep sur les entrÃ©es. Voir Sync/Coop.cs.
+    /// Tout le monde joue la même run, synchronisée en lockstep sur les entrées. Voir Sync/Coop.cs.
     /// </summary>
-    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.8.0",
-        Author = "DiceModding", Description = "Coop Ã  2 ou 3 : chacun sa run et son hÃ©ros, ennemis et plateau partagÃ©s (TCP).")]
+    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.8.1",
+        Author = "DiceModding", Description = "Coop à 2 ou 3 : chacun sa run et son héros, ennemis et plateau partagés (TCP).")]
     public class MultiplayerMod : DiceMod
     {
         public static MultiplayerMod Instance;
@@ -37,17 +37,17 @@ namespace DiceMultiplayer
         public override void OnLoad()
         {
             Instance = this;
-            _name = Config.Bind("RÃ©seau", "Pseudo", Environment.UserName, "Ton nom affichÃ© aux autres joueurs");
-            // Argument -ditd-player (test Ã  plusieurs fenÃªtres) : pseudo propre Ã  cette instance, gardÃ© en mÃ©moire seulement
+            _name = Config.Bind("Réseau", "Pseudo", Environment.UserName, "Ton nom affiché aux autres joueurs");
+            // Argument -ditd-player (test à plusieurs fenêtres) : pseudo propre à cette instance, gardé en mémoire seulement
             var args = Environment.GetCommandLineArgs();
             int ai = Array.FindIndex(args, a => string.Equals(a, "-ditd-player", StringComparison.OrdinalIgnoreCase));
             if (ai >= 0 && ai + 1 < args.Length) _nameOverride = args[ai + 1];
-            _host = Config.Bind("RÃ©seau", "DernierHote", "127.0.0.1", "Adresse IP de l'hÃ´te (LAN, Radmin VPN, ZeroTier, Tailscaleâ€¦)");
-            _port = Config.Bind("RÃ©seau", "Port", 27015, "Port TCP");
-            _rotateLeader = Config.Bind("RÃ¨gles", "MeneurTournant", false, "Le meneur (carte, rÃ©compenses, boutique) change Ã  chaque Ã©tage");
+            _host = Config.Bind("Réseau", "DernierHote", "127.0.0.1", "Adresse IP de l'hôte (LAN, Radmin VPN, ZeroTier, Tailscale…)");
+            _port = Config.Bind("Réseau", "Port", 27015, "Port TCP");
+            _rotateLeader = Config.Bind("Règles", "MeneurTournant", false, "Le meneur (carte, récompenses, boutique) change à chaque étage");
             _showCursors = Config.Bind("Affichage", "Curseurs", true, "Afficher les curseurs des autres joueurs");
-            _localOnly = Config.Bind("RÃ¨gles", "UILocale", "Settings,Pause,Backpack,Codex,Feedback,Tooltip,Glossary,Options",
-                "Mots-clÃ©s de chemins d'UI dont les clics restent locaux (non synchronisÃ©s), sÃ©parÃ©s par des virgules");
+            _localOnly = Config.Bind("Règles", "UILocale", "Settings,Pause,Backpack,Codex,Feedback,Tooltip,Glossary,Options",
+                "Mots-clés de chemins d'UI dont les clics restent locaux (non synchronisés), séparés par des virgules");
 
             Coop.RotateLeader = () => _rotateLeader.Value;
             Coop.LocalOnlyKeywords = () => _localOnly.Value.Split(',');
@@ -57,7 +57,7 @@ namespace DiceMultiplayer
 
         public override void OnDisable() => Coop.Detach();
 
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Boucle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ───────────── Boucle ─────────────
 
         public override void OnUpdate()
         {
@@ -90,9 +90,9 @@ namespace DiceMultiplayer
         public override void OnTurnStateChanged(BattleSystem battle, BattleSystem.TurnState state)
         {
             if (!Coop.Active) return;
-            // Fin de mon tour : mes dÃ©s quittent le plateau chez les autres
+            // Fin de mon tour : mes dés quittent le plateau chez les autres
             if (state == BattleSystem.TurnState.EndTurn) Board.OnLocalTurnEnd();
-            // DÃ©but de tour : l'hÃ´te envoie les PV de rÃ©fÃ©rence des ennemis (une fois les coups du tour prÃ©cÃ©dent arrivÃ©s)
+            // Début de tour : l'hôte envoie les PV de référence des ennemis (une fois les coups du tour précédent arrivés)
             if (state == BattleSystem.TurnState.SelectDice && Coop.IsHost) Game.Schedule(Combat.HostBroadcastOncePerTurn, 0.5f);
         }
 
@@ -105,10 +105,10 @@ namespace DiceMultiplayer
         private static bool _attackWarm;
 
         /// <summary>
-        /// Le constructeur statique d'Attack crÃ©e Attack.ForceKill, qui lit RunInfo.CurrentRun : s'il s'exÃ©cute Ã  un moment
-        /// oÃ¹ la run est absente, la classe reste cassÃ©e pour tout le processus (TypeInitializationException Ã  chaque coup).
-        /// On le dÃ©clenche donc ici, sur la carte, quand la run existe forcÃ©ment.
-        /// ignoreEndlessIncrease = true : notre instance Ã  nous ne lit pas la run.
+        /// Le constructeur statique d'Attack crée Attack.ForceKill, qui lit RunInfo.CurrentRun : s'il s'exécute à un moment
+        /// où la run est absente, la classe reste cassée pour tout le processus (TypeInitializationException à chaque coup).
+        /// On le déclenche donc ici, sur la carte, quand la run existe forcément.
+        /// ignoreEndlessIncrease = true : notre instance à nous ne lit pas la run.
         /// </summary>
         private void PrewarmAttack()
         {
@@ -118,11 +118,11 @@ namespace DiceMultiplayer
             {
                 var a = new Attack(0, 1, false, null, false, true);
                 _attackWarm = true;
-                Logger.LogInfo($"[diag] Attack initialisÃ©e (run {(hasRun ? "prÃ©sente" : "ABSENTE")}, ForceKill {(Attack.ForceKill != null ? "ok" : "null")}).");
+                Logger.LogInfo($"[diag] Attack initialisée (run {(hasRun ? "présente" : "ABSENTE")}, ForceKill {(Attack.ForceKill != null ? "ok" : "null")}).");
             }
             catch (Exception e)
             {
-                Coop.AddLog($"[diag] Attack dÃ©jÃ  cassÃ©e avant la carte (run {(hasRun ? "prÃ©sente" : "ABSENTE")}) : {e.GetType().Name} {e.Message}");
+                Coop.AddLog($"[diag] Attack déjà cassée avant la carte (run {(hasRun ? "présente" : "ABSENTE")}) : {e.GetType().Name} {e.Message}");
             }
         }
 
@@ -131,7 +131,7 @@ namespace DiceMultiplayer
             if (current == GameManager.GameState.Map) PrewarmAttack();
             if (current == GameManager.GameState.TitleScreen) Team.Picks.Clear();
 
-            // De retour sur la carte = mon Ã©tage est fini (rÃ©compenses, Ã©vÃ©nement, boutique) : le meneur peut avancer
+            // De retour sur la carte = mon étage est fini (récompenses, événement, boutique) : le meneur peut avancer
             if (Coop.Active && Game.InRun)
             {
                 if (current == GameManager.GameState.Map) Coop.SetOnMap(true);
@@ -142,7 +142,7 @@ namespace DiceMultiplayer
         public override void OnTurnStart(BattleSystem battle, int turn)
         {
             if (!Coop.Active) return;
-            // Empreinte prise un peu aprÃ¨s le dÃ©but du tour, une fois la pioche terminÃ©e
+            // Empreinte prise un peu après le début du tour, une fois la pioche terminée
             Game.Schedule(() =>
             {
                 var (h, detail) = StateHash.Compute();
@@ -156,20 +156,20 @@ namespace DiceMultiplayer
 
         public override void OnRunStart(CurrentRunData run, bool loaded) { _floorKey = 0; Coop.DesyncWarning = null; }
 
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ───────────── Overlay ─────────────
 
         public override void OnGUI()
         {
             var ev = Event.current;
             if (ev != null) _mouse = new Vector2(ev.mousePosition.x, Screen.height - ev.mousePosition.y);
 
-            // Ã‰cran d'attente du client (avant que l'hÃ´te n'ouvre la sÃ©lection)
+            // Écran d'attente du client (avant que l'hôte n'ouvre la sélection)
             if (Lobby.ClientWaiting && !_panelOpen)
             {
                 Lobby.DrawWaitingScreen(() =>
                 {
                     UI.BeginRow();
-                    if (UI.Button("Quitter la partie", 160)) { Coop.Detach(); Coop.AddLog("Session fermÃ©e."); }
+                    if (UI.Button("Quitter la partie", 160)) { Coop.Detach(); Coop.AddLog("Session fermée."); }
                     if (UI.Button("Panneau coop (F2)", 160)) _panelOpen = true;
                     UI.EndRow();
                 });
@@ -177,7 +177,7 @@ namespace DiceMultiplayer
                 return;
             }
 
-            // Panneau coop : touche F2 ou bouton en haut Ã  gauche
+            // Panneau coop : touche F2 ou bouton en haut à gauche
             if (ev != null && ev.type == EventType.KeyDown && ev.keyCode == KeyCode.F2) { _panelOpen = !_panelOpen; ev.Use(); }
             if (_panelOpen) DrawPanel();
             else if (!Game.InRun)
@@ -190,7 +190,7 @@ namespace DiceMultiplayer
             if (!Coop.Active) return;
             if (ev == null || ev.type != EventType.Repaint) return;
 
-            // Liste des joueurs (en haut Ã  droite)
+            // Liste des joueurs (en haut à droite)
             float w = 240, x = Screen.width - w - 10, y = 10;
             var players = Coop.Net.Players.OrderBy(p => p.Id).ToList();
             GUI.Box(new Rect(x, y, w, 26 + players.Count * 20 + (Game.InBattle ? 20 : 0)), "");
@@ -201,14 +201,14 @@ namespace DiceMultiplayer
                 string me = p.Id == Coop.LocalId ? " (toi)" : "";
                 string extra;
                 if (!Game.InRun)
-                    extra = Team.Picks.TryGetValue(p.Id, out var pick) ? $"  âœ” {Team.Describe(pick)}" : "  â€¦ choisit";
+                    extra = Team.Picks.TryGetValue(p.Id, out var pick) ? $"  ✔ {Team.Describe(pick)}" : "  … choisit";
                 else
                 {
                     var rp = Team.RunPicks.FirstOrDefault(r => r.Id == p.Id);
                     extra = rp != null ? $" ({(Player.CharacterName)rp.Run.Character})" : "";
-                    if (Game.InBattle) extra += Coop.ReadyPlayers.Contains(p.Id) ? "  âœ” prÃªt" : "  â€¦ joue";
+                    if (Game.InBattle) extra += Coop.ReadyPlayers.Contains(p.Id) ? "  ✔ prêt" : "  … joue";
                 }
-                GUI.Label(new Rect(x + 8, y, w, 20), $"<color={p.Color}>â—</color> {p.Name}{me}{extra}");
+                GUI.Label(new Rect(x + 8, y, w, 20), $"<color={p.Color}>●</color> {p.Name}{me}{extra}");
                 y += 20;
             }
             if (Game.InBattle) GUI.Label(new Rect(x + 8, y, w, 20), "<i>Fin de tour : tout le monde doit valider</i>");
@@ -224,22 +224,22 @@ namespace DiceMultiplayer
                 {
                     if (kv.Key == Coop.LocalId || kv.Value.scene != scene || Time.unscaledTime - kv.Value.time > 3f) continue;
                     float cx = kv.Value.x * Screen.width, cy = Screen.height - kv.Value.y * Screen.height;
-                    GUI.Label(new Rect(cx - 6, cy - 10, 30, 24), $"<size=22><color={Coop.ColorOf(kv.Key)}>âž¤</color></size>");
+                    GUI.Label(new Rect(cx - 6, cy - 10, 30, 24), $"<size=22><color={Coop.ColorOf(kv.Key)}>➤</color></size>");
                     GUI.Label(new Rect(cx + 14, cy + 4, 160, 20), $"<color={Coop.ColorOf(kv.Key)}>{Coop.NameOf(kv.Key)}</color>");
                 }
             }
 
-            // DÃ©s posÃ©s par les autres joueurs sur le plateau
+            // Dés posés par les autres joueurs sur le plateau
             try { Board.DrawGhosts(); } catch { }
             try { Coop.DrawVotes(); } catch { }
             try { Coop.DrawReadyBanner(); } catch { }
             try { Preview.Draw(); } catch { }
 
-            // Toast et alerte de dÃ©synchronisation
+            // Toast et alerte de désynchronisation
             if (Coop.ToastText != null && Time.unscaledTime < Coop.ToastUntil)
                 GUI.Box(new Rect(Screen.width / 2f - 200, 60, 400, 28), Coop.ToastText);
             if (Coop.DesyncWarning != null)
-                GUI.Label(new Rect(10, 10, 700, 40), $"<size=16><color=#ff5050><b>âš  {Coop.DesyncWarning}</b></color></size>");
+                GUI.Label(new Rect(10, 10, 700, 40), $"<size=16><color=#ff5050><b>⚠ {Coop.DesyncWarning}</b></color></size>");
         }
 
         private bool _panelOpen;
@@ -263,7 +263,7 @@ namespace DiceMultiplayer
         }
 
 
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Page du menu F1 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ───────────── Page du menu F1 ─────────────
 
         public override void OnSettingsGUI()
         {
@@ -274,25 +274,25 @@ namespace DiceMultiplayer
             {
                 _port.Value = UI.IntStepper("Port", _port.Value, 1, 1024, 65535);
                 UI.Space();
-                UI.Header("HÃ©berger");
+                UI.Header("Héberger");
                 UI.Label("Partage ton IP (locale, ou celle de Radmin VPN, ZeroTier ou Tailscale) et ouvre le port TCP dans le pare-feu.");
-                if (UI.Button("CrÃ©er la partie"))
+                if (UI.Button("Créer la partie"))
                 {
-                    try { Coop.Attach(NetSession.Host(_port.Value, LocalName)); Coop.AddLog($"Partie crÃ©Ã©e sur le port {_port.Value}"); }
-                    catch (Exception e) { Coop.AddLog("Impossible d'hÃ©berger : " + e.Message); }
+                    try { Coop.Attach(NetSession.Host(_port.Value, LocalName)); Coop.AddLog($"Partie créée sur le port {_port.Value}"); }
+                    catch (Exception e) { Coop.AddLog("Impossible d'héberger : " + e.Message); }
                 }
                 UI.Space();
                 UI.Header("Rejoindre");
-                UI.BeginRow(); UI.Label("IP de l'hÃ´te :"); _host.Value = UI.Text(_host.Value); UI.EndRow();
+                UI.BeginRow(); UI.Label("IP de l'hôte :"); _host.Value = UI.Text(_host.Value); UI.EndRow();
                 if (UI.Button("Rejoindre")) Coop.Attach(NetSession.Join(_host.Value.Trim(), _port.Value, LocalName));
             }
             else
             {
-                UI.Label($"{(net.IsHost ? "HÃ”TE" : "CLIENT")} - {net.Status}");
+                UI.Label($"{(net.IsHost ? "HÔTE" : "CLIENT")} - {net.Status}");
                 UI.Label("Joueurs : " + string.Join(", ", net.Players.Select(p => $"{p.Name}{(p.Id == net.LocalId ? " (toi)" : "")}")));
-                UI.Label("Chacun choisit son personnage (Nouvelle run) puis clique sur Commencer. La run dÃ©marre quand tout le monde est prÃªt.");
+                UI.Label("Chacun choisit son personnage (Nouvelle run) puis clique sur Commencer. La run démarre quand tout le monde est prêt.");
 
-                if (UI.Button("Quitter la partie")) { Coop.Detach(); Coop.AddLog("Session fermÃ©e."); }
+                if (UI.Button("Quitter la partie")) { Coop.Detach(); Coop.AddLog("Session fermée."); }
 
                 UI.Space();
                 UI.BeginRow();
