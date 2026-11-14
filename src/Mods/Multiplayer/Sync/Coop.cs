@@ -250,8 +250,10 @@ namespace DiceMultiplayer.Sync
         {
             if (!Active || next != Map.MapState.MovePlayer) return true;
             if (Time.unscaledTime < _allowMoveUntil) return true;
-            if (_lastClicked == null) { AddLog("[vote] Départ sans case connue : laissé passer."); return true; }
-            var c = _lastClicked.Value;
+            // Destination choisie : dernière case cliquée, sinon le choix déjà enregistré par le jeu (flèches de chemin…)
+            var target = _lastClicked ?? ReadDesired(Game.Map);
+            if (target == null) { AddLog("[vote] Départ sans destination choisie (suite automatique) : laissé passer."); return true; }
+            var c = target.Value;
             var vote = new Msg { t = T.Vote, sx = c.x, sy = c.y };
             Send(vote);
             vote.id = LocalId;
@@ -296,13 +298,34 @@ namespace DiceMultiplayer.Sync
             AddLog($"[vote] Départ vers la case {m.sx},{m.sy}.");
             _allowMoveUntil = Time.unscaledTime + 3f;
             _lastClicked = null;
-            // Sélection de la case gagnante (comme un clic), puis départ si le jeu ne l'a pas déjà lancé
+            // La case gagnante devient le choix du jeu (comme un clic), puis départ si le jeu ne l'a pas déjà lancé
+            WriteDesired(map, new Vector2Int(m.sx, m.sy));
             WithReplay(() => map.ClickOnMapTile(tile));
+            WriteDesired(map, new Vector2Int(m.sx, m.sy));
             Game.Schedule(() =>
             {
                 var st = Game.Safe(() => map.CurrentMapState);
                 if (st == Map.MapState.SelectTile) Game.Safe(() => { map.ChangeState(Map.MapState.MovePlayer); return 0; });
             }, 0.3f);
+        }
+
+        /// <summary>Champ privé Map.desiredNextPlayerCoord (Nullable&lt;Vector2Int&gt;) : la destination choisie par le joueur.</summary>
+        private static Vector2Int? ReadDesired(Map map)
+        {
+            if (map == null) return null;
+            try
+            {
+                var n = map.desiredNextPlayerCoord;
+                return n.HasValue ? n.Value : (Vector2Int?)null;
+            }
+            catch { return null; }
+        }
+
+        private static void WriteDesired(Map map, Vector2Int coord)
+        {
+            if (map == null) return;
+            try { map.desiredNextPlayerCoord = new Il2CppSystem.Nullable<Vector2Int>(coord); }
+            catch (Exception e) { AddLog("[vote] Écriture de la destination impossible : " + e.Message); }
         }
 
         private static VisualMapTile FindTile(int x, int y)
