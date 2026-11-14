@@ -234,7 +234,7 @@ namespace DiceMultiplayer.Sync
                     {
                         _lastMapClickTime = Time.unscaledTime;
                         // Départ bloqué en attente d'un choix : la case survolée au moment de ce clic devient le vote
-                        if (_awaitingChoice)
+                        if (VotingOpen)
                         {
                             var h = HoveredCoord(Game.Map);
                             if (h != null) CastVote(h.Value);
@@ -266,7 +266,7 @@ namespace DiceMultiplayer.Sync
             _lastClicked = coord;
             _lastMapClickTime = Time.unscaledTime;
             // Départ déjà bloqué faute de choix : ce clic est le vote
-            if (_awaitingChoice) { CastVote(coord); return false; }
+            if (VotingOpen) { CastVote(coord); return false; }   // départ bloqué ou vote en cours : ce clic est (ou change) mon vote
             return true;
         }
 
@@ -309,14 +309,22 @@ namespace DiceMultiplayer.Sync
         private static float _lastMapClickTime = -10f;
         private static readonly HashSet<string> MapClickTypes = new HashSet<string> { "VisualMapTile", "MapTileArrow", "HoverEvents" };
 
+        /// <summary>J'ai voté et le vote n'est pas encore résolu : mes clics sur la carte changent mon vote.</summary>
+        private static bool _myVotePending;
+
+        /// <summary>Vrai tant qu'un vote local peut être émis ou changé (départ bloqué en attente, ou vote déjà émis).</summary>
+        private static bool VotingOpen => _awaitingChoice || _myVotePending;
+
         private static void CastVote(Vector2Int c)
         {
+            bool change = _myVotePending;
             _awaitingChoice = false;
+            _myVotePending = true;
             var vote = new Msg { t = T.Vote, sx = c.x, sy = c.y };
             Send(vote);
             vote.id = LocalId;
             OnVote(vote);
-            Toast("Vote enregistré : en attente des autres joueurs");
+            Toast(change ? "Vote changé" : "Vote enregistré : en attente des autres joueurs (re-clique pour changer)");
         }
 
         /// <summary>Cases accessibles au prochain pas (Map.NextPlayerTiles, privée dans le jeu).</summary>
@@ -341,17 +349,34 @@ namespace DiceMultiplayer.Sync
 
         private static void OnVote(Msg m)
         {
+            // Annonce du compte à rebours par l'hôte (pas un vote)
+            if (m.sx == int.MinValue) { ResolveAt = Time.unscaledTime + m.turn / 1000f; return; }
             Votes[m.id] = m;
             AddLog($"{NameOf(m.id)} vote pour la case {Key(m)} ({Votes.Count}/{Net.Players.Count}).");
             if (IsHost) TryResolveVote();
         }
 
         /// <summary>Appelé aussi quand un joueur revient sur la carte : le vote se résout dès que tout le monde est là et a voté.</summary>
+        /// <summary>Quand tout le monde a voté, le départ attend ce délai : on peut encore changer d'avis (chaque changement le relance).</summary>
+        private const float ResolveDelay = 2f;
+        private static int _voteVersion;
+        public static float ResolveAt = -1f;
+
         public static void TryResolveVote()
         {
-            if (!Active || !IsHost || Votes.Count == 0) return;
+            if (!Active || !IsHost || Votes.Count == 0) { ResolveAt = -1f; return; }
             // On vote là où le jeu propose le choix (carte, ou juste après un combat) : seul compte que tout le monde ait voté
-            if (Net.Players.Any(p => !Votes.ContainsKey(p.Id))) return;
+            if (Net.Players.Any(p => !Votes.ContainsKey(p.Id))) { ResolveAt = -1f; return; }
+            int version = ++_voteVersion;
+            ResolveAt = Time.unscaledTime + ResolveDelay;
+            Send(new Msg { t = T.Vote, id = LocalId, sx = int.MinValue, turn = (int)(ResolveDelay * 1000) });   // annonce du compte à rebours
+            Game.Schedule(() => { if (version == _voteVersion) ResolveNow(); }, ResolveDelay);
+        }
+
+        private static void ResolveNow()
+        {
+            ResolveAt = -1f;
+            if (!Active || !IsHost || Votes.Count == 0 || Net.Players.Any(p => !Votes.ContainsKey(p.Id))) return;
 
             // Majorité ; en cas d'égalité, le choix de l'hôte s'il en fait partie, sinon celui du plus petit id
             var groups = Votes.Values.GroupBy(Key).ToList();
@@ -372,6 +397,8 @@ namespace DiceMultiplayer.Sync
         {
             Votes.Clear();
             _awaitingChoice = false;
+            _myVotePending = false;
+            ResolveAt = -1f;
             // Vote pour une flèche : on rejoue le clic du joueur sur cette flèche, chez tous
             if (!string.IsNullOrEmpty(m.path))
             {
@@ -418,6 +445,7 @@ namespace DiceMultiplayer.Sync
             var parentTile = Game.Safe(() => arrow.GetComponentInParent<VisualMapTile>());
             var coord = parentTile != null ? Game.Safe(() => parentTile.ActiveTile.CoordVector) : new Vector2Int(-999, -999);
             _awaitingChoice = false;
+            _myVotePending = true;
             var vote = new Msg { t = T.Vote, path = path, sx = coord.x, sy = coord.y };
             Send(vote);
             vote.id = LocalId;
@@ -506,10 +534,12 @@ namespace DiceMultiplayer.Sync
             }
             var missing = Net.Players.Where(p => !Votes.ContainsKey(p.Id)).Select(p => p.Name).ToList();
             var away = new List<string>();   // le vote ne dépend plus de l'état « carte »
-            string status = away.Count > 0 ? "En attente de " + string.Join(", ", away) + " (pas encore sur la carte)"
+            float left = ResolveAt - Time.unscaledTime;
+            string status = left > 0 ? $"Tout le monde a voté : départ dans {Math.Ceiling(left):0} s… (clique ailleurs pour changer ton vote)"
+                          : away.Count > 0 ? "En attente de " + string.Join(", ", away) + " (pas encore sur la carte)"
                           : Votes.Count == 0 ? "Plusieurs chemins : clique sur la case de ton choix pour voter"
                           : missing.Count > 0 ? "Votes manquants : " + string.Join(", ", missing) : "";
-            if (status != "") GUI.Box(new Rect(Screen.width / 2f - 220, Screen.height - 46, 440, 28), status);
+            if (status != "") GUI.Box(new Rect(Screen.width / 2f - 290, Screen.height - 46, 580, 28), status);
         }
 
         public static void EndLocalClick() { if (ClickDepth > 0) ClickDepth--; }
