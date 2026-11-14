@@ -1,6 +1,6 @@
 {
-    "version":  "0.9.8",
-    "changelog":  "Animations : chaque héros joue sa propre animation ; aperçu des dégâts de zone plus doublé",
+    "version":  "0.9.9",
+    "changelog":  "Aperçu des dégâts calculé exactement comme le jeu (zone sur cible secondaire correcte)",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "7ccfefef975c4c3dc0ce7dcdb0978442774fdb20aab509f4bc275f6bc076c272",
+                      "sha256":  "30e7f2d32c54c39b3c1779097e622b0a65735104db422c8e7ad16a73ab604303",
                       "size":  50176,
-                      "version":  "0.9.8"
+                      "version":  "0.9.9"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.9.8"
+                      "version":  "0.9.9"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "575df0858fb3f4a50f52dd470e6fc3df76f15111c8791bdd2765461ed053f419",
+                      "sha256":  "d87cbd0702c8b53ff7b368a57737af43a4ce7eece7e7c52b0aaf3ebc55782db9",
                       "size":  10752,
-                      "version":  "0.9.8",
+                      "version":  "0.9.9",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "cf3cb7989796ed8c4b303d962a513fe5ae9f4c030d7994e818b1bb513b81c445",
+                      "sha256":  "74d3516f5be1222ba47483287c4aece45b365ebbe881b3374c68fd34e5230f45",
                       "size":  8704,
-                      "version":  "0.9.8",
+                      "version":  "0.9.9",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "5d31b2dfb6af212e09a2e2dec6eb5a5eb8d383f7a6bc8f1952442305aef50a03",
-                      "size":  167936,
-                      "version":  "0.9.8"
+                      "sha256":  "ef45283d651b876819aa07b7e6442fdc637cef62926aa5dec9093e5ad8a2ed57",
+                      "size":  168448,
+                      "version":  "0.9.9"
                   }
               ],
     "remove":  [

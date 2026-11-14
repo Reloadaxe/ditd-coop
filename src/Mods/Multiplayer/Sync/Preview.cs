@@ -74,7 +74,7 @@ namespace DiceMultiplayer.Sync
             foreach (var e in Game.Enemies)
             {
                 int idx = Game.Safe(() => battle.GetBattleIndexOfEntity(e));
-                int dmg = Game.Safe(() => values.GetTargetActionAmountFromPlayer(DiceData.GeneralType.Attacks, e));
+                int dmg = ArrowValue(values, e);
                 if (dmg > 0) res[idx] = dmg;
             }
             return res;
@@ -99,13 +99,26 @@ namespace DiceMultiplayer.Sync
             try { return Game.Battle.GetBattleIndexOfEntity(e); } catch { return -1; }
         }
 
-        /// <summary>Dégâts prévus par MES dés sur cet ennemi (-1 si inconnu).</summary>
-        private static int LocalFor(Enemy e)
+        private static readonly DiceData.Type[] ArrowTypes =
+            { DiceData.Type.Attack, DiceData.Type.AreaAttack, DiceData.Type.PunctureAttack, DiceData.Type.LethalAttack };
+
+        /// <summary>
+        /// Nombre de la flèche de cible, calculé comme le jeu (BattleSystem.ChangeBattleValues) : attaque, zone, perforante
+        /// et létale visant cet ennemi, plus la part d'éclaboussure (GetSplashAttackValue : seulement la part reçue par une
+        /// cible secondaire), passés dans un Hit de mon héros (modificateurs appliqués). Mes dés seuls : les copies des dés
+        /// des autres sont exclues des valeurs. -1 si inconnu.
+        /// </summary>
+        private static int ArrowValue(BattleSystem.Values values, Enemy e)
         {
+            if (values == null || e == null) return -1;
             try
             {
-                var values = Game.Battle?.BattleValues;
-                return values == null ? -1 : values.GetTargetActionAmountFromPlayer(DiceData.GeneralType.Attacks, e);
+                int sum = 0;
+                foreach (var t in ArrowTypes) sum += values.GetTargetActionAmountFromOwner(null, t, e, DiceData.Property.None);
+                sum += values.GetSplashAttackValue(e, DiceData.Property.None);
+                if (sum <= 0) return 0;
+                var hit = new Hit(sum, false, Game.Player, false, false);
+                return hit.DamageAmount;
             }
             catch { return -1; }
         }
@@ -134,7 +147,7 @@ namespace DiceMultiplayer.Sync
                 // on repart alors de MES actions seules (les copies en sont exclues), plus l'aperçu des autres.
                 if (Board.HasRealGhosts && enemy != null)
                 {
-                    int mine = LocalFor(enemy);
+                    int mine = ArrowValue(Game.Battle?.BattleValues, enemy);
                     if (mine >= 0) __0 = mine;
                 }
                 __0 += RemoteFor(enemy);
