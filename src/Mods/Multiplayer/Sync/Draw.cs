@@ -106,6 +106,12 @@ namespace DiceMultiplayer.Sync
             }
         }
 
+        /// <summary>Postfix de DiceManager.MaxDiceInHand : la main peut contenir les dés de tous les joueurs.</summary>
+        public static void OnMaxHand(ref int result)
+        {
+            if (Heroes.Enabled && Players > 1) result *= Players;
+        }
+
         /// <summary>Postfix de DiceManager.InitialEnergyPerTurn : réserve commune à la taille de l'équipe.</summary>
         public static void OnInitialEnergy(ref int result)
         {
@@ -138,11 +144,24 @@ namespace DiceMultiplayer.Sync
 
         private static void SetVisible(GameObjectDice d, bool visible)
         {
+            // 1) Transparence et clics
             var cg = Game.Safe(() => d.canvasGroup);
             if (cg != null) { cg.alpha = visible ? 1f : 0f; cg.blocksRaycasts = visible; cg.interactable = visible; }
             var vis = Game.Safe(() => d.visuals);
             if (vis != null)
                 foreach (var r in vis.GetComponentsInChildren<Renderer>(true)) r.enabled = visible;
+
+            // 2) Taille nulle : rien ne dépasse, même si le jeu réanime la transparence
+            var t = d.transform;
+            if (!visible) { if (t.localScale != Vector3.zero) { _scales[d.Pointer] = t.localScale; t.localScale = Vector3.zero; } }
+            else if (_scales.TryGetValue(d.Pointer, out var s)) { t.localScale = s; _scales.Remove(d.Pointer); }
+
+            // 3) Hors de la mise en page de la main : pas de trou laissé par les dés des autres
+            var le = d.GetComponent<UnityEngine.UI.LayoutElement>();
+            if (le == null && !visible) le = d.gameObject.AddComponent<UnityEngine.UI.LayoutElement>();
+            if (le != null) le.ignoreLayout = !visible;
         }
+
+        private static readonly Dictionary<IntPtr, Vector3> _scales = new Dictionary<IntPtr, Vector3>();
     }
 }

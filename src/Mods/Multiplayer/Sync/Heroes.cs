@@ -91,6 +91,8 @@ namespace DiceMultiplayer.Sync
                     // Le Start() du prefab peut recharger les données de la run (celles de l'hôte) : on réimpose les siennes
                     var data = Game.Safe(() => h.Entity.ActiveData);
                     if (data == null || data.Pointer != h.Data.Pointer) Game.Safe(() => { h.Entity.LoadEntityData(h.Data); return 0; });
+                    // La barre de vie ne se met pas à jour seule après LoadEntityData (elle affichait 0)
+                    Game.Safe(() => { h.Entity.ForceHealthRefresh(); return 0; });
                 }
                 k++;
             }
@@ -132,6 +134,7 @@ namespace DiceMultiplayer.Sync
                 try { p.Init(); } catch (Exception e) { Coop.AddLog("Init du héros : " + e.Message); }
                 try { p.Enter(); } catch (Exception e) { Coop.AddLog("Enter du héros : " + e.Message); }
                 p.LoadEntityData(h.Data);
+                try { p.ForceHealthRefresh(); } catch { }
 
                 var rends = go.GetComponentsInChildren<SpriteRenderer>(true);
                 MultiplayerMod.Instance.Logger.LogInfo($"[diag] Héros {h.PlayerId} : actif={go.activeInHierarchy} pos={go.transform.position} hôte={host.transform.position} " +

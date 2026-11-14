@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Reflection;
+using DiceLoader;
 using HarmonyLib;
 using Il2CppInterop.Runtime.InteropTypes;
 using UnityEngine.EventSystems;
@@ -91,6 +92,10 @@ namespace DiceMultiplayer.Sync
             P(h, typeof(Player), nameof(Player.Death), nameof(PlayerDeathPrefix));
             P(h, typeof(DiceManager.DiceList), "get_RandomDice", nameof(RandomDicePostfix), postfix: true);
             P(h, typeof(DiceManager), nameof(DiceManager.InitialEnergyPerTurn), nameof(InitialEnergyPostfix), postfix: true);
+            P(h, typeof(DiceManager), nameof(DiceManager.MaxDiceInHand), nameof(MaxHandPostfix), postfix: true);
+            // Un GameObjectDice sans données (objet auxiliaire venu du prefab d'un héros supplémentaire) faisait planter le calcul d'énergie
+            P(h, typeof(GameObjectDice), "GetCurrentEnergyCost", nameof(EnergyCostGuard));
+            P(h, typeof(GameObjectDice), "CanSelectFromHand", nameof(CanSelectGuard));
 
             // Diagnostic : qui remet la run à zéro ?
             foreach (var m in new[] { nameof(RunInfo.Reset), nameof(RunInfo.ExitRun), nameof(RunInfo.EndUnfinishedRun), nameof(RunInfo.EndRun) })
@@ -229,6 +234,22 @@ namespace DiceMultiplayer.Sync
         }
 
         private static void InitialEnergyPostfix(ref int __result) => Draw.OnInitialEnergy(ref __result);
+
+        private static void MaxHandPostfix(ref int __result) => Draw.OnMaxHand(ref __result);
+
+        private static bool EnergyCostGuard(GameObjectDice __instance, ref int __result)
+        {
+            if (Game.Safe(() => __instance.CurrentActiveDice) != null) return true;
+            __result = 0;
+            return false;
+        }
+
+        private static bool CanSelectGuard(GameObjectDice __instance, ref bool __result)
+        {
+            if (Game.Safe(() => __instance.CurrentActiveDice) != null) return true;
+            __result = false;
+            return false;
+        }
 
         private static void RunResetTrace(System.Reflection.MethodBase __originalMethod)
         {
