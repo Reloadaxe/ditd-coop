@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <!-- Le loader s'installe comme plugin BepInEx -->
-  <Target Name="DeployLoader" AfterTargets="Build">
+  <Target Name="DeployLoader" AfterTargets="Build" Condition="'$(SkipDeploy)' != 'true'">
     <MakeDir Directories="$(BepInExDir)\plugins\DiceLoader" />
     <Copy SourceFiles="$(TargetPath);$(TargetDir)$(TargetName).xml" DestinationFolder="$(BepInExDir)\plugins\DiceLoader" />
     <MakeDir Directories="$(ModsDir)" />

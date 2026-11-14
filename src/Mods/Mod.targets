@@ -4,7 +4,7 @@
     <ProjectReference Include="$(MSBuildThisFileDirectory)..\DiceLoader\DiceLoader.csproj" Private="false" />
   </ItemGroup>
 
-  <Target Name="DeployMod" AfterTargets="Build">
+  <Target Name="DeployMod" AfterTargets="Build" Condition="'$(SkipDeploy)' != 'true'">
     <MakeDir Directories="$(ModsDir)\$(AssemblyName)" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModsDir)\$(AssemblyName)" />
     <Message Importance="high" Text="Mod $(AssemblyName) -> $(ModsDir)\$(AssemblyName)" />

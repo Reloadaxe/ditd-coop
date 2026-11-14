@@ -25,7 +25,8 @@ if (-not (Test-Path "$GameDir\BepInEx\interop\Assembly-CSharp.dll")) { throw "In
 
 function Build($proj, [string[]]$extra = @()) {
     Write-Host "==> $proj" -ForegroundColor Cyan
-    dotnet build (Join-Path $root $proj) -c Release -nologo -v:minimal "-p:GameDir=$GameDir" @extra
+    # SkipDeploy : on ne copie pas dans le dossier du jeu (DLL verrouillées si le jeu tourne)
+    dotnet build (Join-Path $root $proj) -c Release -nologo -v:minimal "-p:GameDir=$GameDir" "-p:SkipDeploy=true" @extra
     if ($LASTEXITCODE -ne 0) { throw "Échec de compilation : $proj" }
 }
 
