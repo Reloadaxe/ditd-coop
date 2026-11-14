@@ -250,8 +250,14 @@ namespace DiceMultiplayer.Sync
         {
             if (!Active || next != Map.MapState.MovePlayer) return true;
             if (Time.unscaledTime < _allowMoveUntil) return true;
-            // Destination choisie : dernière case cliquée, sinon le choix déjà enregistré par le jeu (flèches de chemin…)
-            var target = _lastClicked ?? ReadDesired(Game.Map);
+            // Destination choisie : dernière case cliquée, sinon le choix enregistré par le jeu (flèches…),
+            // sinon la case survolée au moment du clic (sélection par le système Selectable du jeu) — uniquement au début
+            // d'un déplacement : en cours de route (pas déjà faits), c'est une suite automatique.
+            var map = Game.Map;
+            var clicked = _lastClicked; var desired = ReadDesired(map); var hovered = HoveredCoord(map); int spent = MovesSpent(map);
+            AddLog($"[vote] Départ demandé : clic={Fmt(clicked)} destination={Fmt(desired)} survol={Fmt(hovered)} pas faits={spent}");
+            var target = clicked ?? desired;
+            if (target == null && spent == 0) target = hovered;
             if (target == null) { AddLog("[vote] Départ sans destination choisie (suite automatique) : laissé passer."); return true; }
             var c = target.Value;
             var vote = new Msg { t = T.Vote, sx = c.x, sy = c.y };
@@ -298,10 +304,14 @@ namespace DiceMultiplayer.Sync
             AddLog($"[vote] Départ vers la case {m.sx},{m.sy}.");
             _allowMoveUntil = Time.unscaledTime + 3f;
             _lastClicked = null;
-            // La case gagnante devient le choix du jeu (comme un clic), puis départ si le jeu ne l'a pas déjà lancé
-            WriteDesired(map, new Vector2Int(m.sx, m.sy));
+            // La case gagnante devient le choix du jeu partout où il peut le lire (survol, curseur, destination),
+            // comme si le joueur l'avait choisie, puis départ si le jeu ne l'a pas déjà lancé
+            var coord = new Vector2Int(m.sx, m.sy);
+            Game.Safe(() => { map.lastHoveredTile = tile; return 0; });
+            Game.Safe(() => { map.navigationCurrentCoord = coord; return 0; });
+            WriteDesired(map, coord);
             WithReplay(() => map.ClickOnMapTile(tile));
-            WriteDesired(map, new Vector2Int(m.sx, m.sy));
+            WriteDesired(map, coord);
             Game.Schedule(() =>
             {
                 var st = Game.Safe(() => map.CurrentMapState);
@@ -325,6 +335,19 @@ namespace DiceMultiplayer.Sync
             vote.id = LocalId;
             OnVote(vote);
             Toast("Vote enregistré : en attente des autres joueurs");
+        }
+
+        private static string Fmt(Vector2Int? v) => v == null ? "—" : $"{v.Value.x},{v.Value.y}";
+
+        /// <summary>Pas déjà faits dans le déplacement en cours (0 = on n'est pas encore parti).</summary>
+        private static int MovesSpent(Map map) => Game.Safe(() => map.currentMoveData != null ? map.currentMoveData.MovesSpent : 0);
+
+        /// <summary>Case survolée en dernier (champ privé Map.lastHoveredTile).</summary>
+        private static Vector2Int? HoveredCoord(Map map)
+        {
+            var t = Game.Safe(() => map?.lastHoveredTile);
+            if (t == null) return null;
+            try { return t.ActiveTile.CoordVector; } catch { return null; }
         }
 
         private static void ClearDesired(Map map)

@@ -83,6 +83,8 @@ namespace DiceMultiplayer.Sync
             // Carte : le choix de case est un vote (toutes les entrées passent par Map.ClickOnMapTile)
             P(h, typeof(Map), nameof(Map.ClickOnMapTile), nameof(MapTileClickPrefix));
             P(h, typeof(Map), nameof(Map.ChangeState), nameof(MapChangeStatePrefix));
+            // Entrée clavier/manette (Rewired) qui demande de sélectionner une case nulle : NullReferenceException en boucle
+            P(h, typeof(Map), nameof(Map.ForceTileSelectableSelection), nameof(NullTileGuard));
             // Embranchement pendant un déplacement : la flèche choisit la direction sans repasser par ChangeState
             P(h, typeof(MapTileArrow), nameof(MapTileArrow.OnPointerClick), nameof(ArrowClickPostfix), postfix: true);
 
@@ -171,6 +173,8 @@ namespace DiceMultiplayer.Sync
 
         // ───── Fin de tour ─────
         private static bool FinishTurnPrefix() => Coop.OnLocalFinishTurn();
+
+        private static bool NullTileGuard(VisualMapTile __0) => __0 != null;
 
         private static void ArrowClickPostfix()
         {
