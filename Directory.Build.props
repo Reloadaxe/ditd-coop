@@ -1,0 +1,37 @@
+<Project>
+  <!--
+    Configuration commune à tous les projets (loader + mods).
+    GameDir : dossier du jeu, contenant "Die in the Dungeon.exe" et BepInEx/.
+    Tu peux le surcharger : dotnet build -p:GameDir="D:\Jeux\Die in the Dungeon"
+  -->
+  <PropertyGroup>
+    <GameDir Condition="'$(GameDir)' == ''">$(MSBuildThisFileDirectory)..\Die in the Dungeon</GameDir>
+    <BepInExDir>$(GameDir)\BepInEx</BepInExDir>
+    <ModsDir>$(GameDir)\Mods</ModsDir>
+
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <NoWarn>$(NoWarn);NETSDK1138;CS8632</NoWarn>
+  </PropertyGroup>
+
+  <!-- Références BepInEx 6 (IL2CPP) + assemblies d'interop générées au 1er lancement du jeu -->
+  <ItemGroup>
+    <Reference Include="$(BepInExDir)\core\BepInEx.Core.dll" Private="false" />
+    <Reference Include="$(BepInExDir)\core\BepInEx.Unity.IL2CPP.dll" Private="false" />
+    <Reference Include="$(BepInExDir)\core\BepInEx.Unity.Common.dll" Private="false" />
+    <Reference Include="$(BepInExDir)\core\0Harmony.dll" Private="false" />
+    <Reference Include="$(BepInExDir)\core\Il2CppInterop.Runtime.dll" Private="false" />
+    <Reference Include="$(BepInExDir)\core\Il2CppInterop.Common.dll" Private="false" />
+    <Reference Include="$(BepInExDir)\interop\*.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="CheckInterop" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(BepInExDir)\interop\Assembly-CSharp.dll')"
+           Text="Assemblies d'interop introuvables dans $(BepInExDir)\interop. Lance le jeu une fois avec BepInEx installé (install.ps1) pour les générer, puis relance la compilation." />
+  </Target>
+</Project>

@@ -1,0 +1,249 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Threading.Tasks;
+
+namespace DitdLauncher
+{
+    /// <summary>
+    /// Toute la logique d'installation et de mise à jour, sans UI.
+    /// Source : dist/manifest.json sur la branche main du dépôt GitHub.
+    /// </summary>
+    public sealed class Updater
+    {
+        public const string Repo = "Reloadaxe/ditd-coop";
+        public const string Branch = "main";
+        public static string DistBase => $"https://raw.githubusercontent.com/{Repo}/{Branch}/dist/";
+        public static string RepoUrl => $"https://github.com/{Repo}";
+
+        public const string GameExe = "Die in the Dungeon.exe";
+
+        public event Action<string> Log;
+        public event Action<int> Progress; // 0..100, -1 = indéterminé
+
+        private static readonly HttpClient Http;
+
+        static Updater()
+        {
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+            Http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+            Http.DefaultRequestHeaders.UserAgent.ParseAdd("DitdCoopLauncher/" + CurrentLauncherVersion);
+            Http.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
+        }
+
+        public static Version CurrentLauncherVersion => Assembly.GetExecutingAssembly().GetName().Version;
+
+        private void L(string s) => Log?.Invoke(s);
+
+        // ───────────── Diagnostic du dossier du jeu ─────────────
+
+        public static bool IsValidGameDir(string dir) =>
+            !string.IsNullOrWhiteSpace(dir) && File.Exists(Path.Combine(dir, GameExe)) && File.Exists(Path.Combine(dir, "GameAssembly.dll"));
+
+        public static bool BepInExInstalled(string dir) => File.Exists(Path.Combine(dir, "BepInEx", "core", "BepInEx.Unity.IL2CPP.dll"));
+        public static bool InteropGenerated(string dir) => File.Exists(Path.Combine(dir, "BepInEx", "interop", "Assembly-CSharp.dll"));
+        public static bool ModsEnabled(string dir) => File.Exists(Path.Combine(dir, "winhttp.dll"));
+
+        /// <summary>Cherche le jeu dans les emplacements Steam habituels.</summary>
+        public static string AutoDetectGameDir()
+        {
+            var candidates = new List<string>();
+            foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
+            {
+                candidates.Add(Path.Combine(drive.RootDirectory.FullName, @"Program Files (x86)\Steam\steamapps\common\Die in the Dungeon"));
+                candidates.Add(Path.Combine(drive.RootDirectory.FullName, @"SteamLibrary\steamapps\common\Die in the Dungeon"));
+                candidates.Add(Path.Combine(drive.RootDirectory.FullName, @"Steam\steamapps\common\Die in the Dungeon"));
+            }
+            return candidates.FirstOrDefault(IsValidGameDir);
+        }
+
+        // ───────────── Manifeste ─────────────
+
+        public async Task<Manifest> FetchManifestAsync()
+        {
+            var json = await Http.GetStringAsync(DistBase + "manifest.json?t=" + DateTime.UtcNow.Ticks).ConfigureAwait(false);
+            return Manifest.Parse(json.TrimStart('﻿'));
+        }
+
+        private static string Resolve(string url) => url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? url : DistBase + url;
+
+        public static string Sha256Of(string file)
+        {
+            if (!File.Exists(file)) return null;
+            using (var sha = SHA256.Create())
+            using (var fs = File.OpenRead(file))
+                return BitConverter.ToString(sha.ComputeHash(fs)).Replace("-", "").ToLowerInvariant();
+        }
+
+        /// <summary>Fichiers du manifeste à télécharger : absents ou différents. Les optionnels non sélectionnés sont ignorés.</summary>
+        public static List<RemoteFile> PendingFiles(Manifest m, string gameDir, ISet<string> selectedOptional)
+        {
+            return m.Files.Where(f => (f.Optional == null || selectedOptional.Contains(f.Optional))
+                                      && !string.Equals(Sha256Of(Path.Combine(gameDir, f.Path)), f.Sha256, StringComparison.OrdinalIgnoreCase))
+                          .ToList();
+        }
+
+        // ───────────── Installation ─────────────
+
+        public async Task InstallAsync(Manifest m, string gameDir, ISet<string> selectedOptional)
+        {
+            if (IsGameRunning()) throw new InvalidOperationException("Ferme le jeu avant d'installer ou de mettre à jour.");
+
+            // 1) BepInEx (couche d'injection)
+            if (!BepInExInstalled(gameDir))
+            {
+                L($"Téléchargement de BepInEx {m.BepInEx.Version}…");
+                var zip = Path.Combine(Path.GetTempPath(), "ditd-bepinex.zip");
+                await DownloadAsync(m.BepInEx.Url, zip).ConfigureAwait(false);
+                L("Extraction de BepInEx…");
+                ExtractOverwrite(zip, gameDir);
+                File.Delete(zip);
+                L("BepInEx installé.");
+            }
+            var disabled = Path.Combine(gameDir, "winhttp.dll.disabled");
+            if (File.Exists(disabled) && !File.Exists(Path.Combine(gameDir, "winhttp.dll")))
+            {
+                File.Move(disabled, Path.Combine(gameDir, "winhttp.dll"));
+                L("Mods réactivés.");
+            }
+            Directory.CreateDirectory(Path.Combine(gameDir, "Mods"));
+
+            // 2) Fichiers du loader et des mods
+            var pending = PendingFiles(m, gameDir, selectedOptional);
+            int i = 0;
+            foreach (var f in pending)
+            {
+                i++;
+                L($"[{i}/{pending.Count}] {f.Path}");
+                var dest = Path.Combine(gameDir, f.Path);
+                Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                var tmp = dest + ".download";
+                await DownloadAsync(Resolve(f.Url), tmp).ConfigureAwait(false);
+                var got = Sha256Of(tmp);
+                if (!string.Equals(got, f.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Delete(tmp);
+                    throw new InvalidDataException($"Empreinte invalide pour {f.Path} (attendu {f.Sha256}, reçu {got}). Réessaie dans quelques minutes : GitHub met peut-être encore le fichier en cache.");
+                }
+                if (File.Exists(dest)) File.Delete(dest);
+                File.Move(tmp, dest);
+            }
+
+            // 3) Optionnels décochés et fichiers obsolètes : suppression
+            foreach (var f in m.Files.Where(f => f.Optional != null && !selectedOptional.Contains(f.Optional)))
+            {
+                var p = Path.Combine(gameDir, f.Path);
+                if (File.Exists(p)) { File.Delete(p); L($"Retiré : {f.Path}"); }
+            }
+            foreach (var r in m.Remove ?? new List<string>())
+            {
+                var p = Path.Combine(gameDir, r);
+                if (File.Exists(p)) { File.Delete(p); L($"Supprimé (obsolète) : {r}"); }
+            }
+
+            Progress?.Invoke(100);
+            L(pending.Count == 0 ? "Tout est déjà à jour." : $"Installation terminée ({pending.Count} fichier(s)).");
+        }
+
+        /// <summary>Désactive l'injection sans rien supprimer : jeu vanilla.</summary>
+        public void DisableMods(string gameDir)
+        {
+            var w = Path.Combine(gameDir, "winhttp.dll");
+            var d = w + ".disabled";
+            if (File.Exists(w)) { if (File.Exists(d)) File.Delete(d); File.Move(w, d); }
+            L("Mods désactivés. Le jeu se lancera sans mods (Installer les réactive).");
+        }
+
+        public void Launch(string gameDir)
+        {
+            Process.Start(new ProcessStartInfo(Path.Combine(gameDir, GameExe)) { WorkingDirectory = gameDir, UseShellExecute = true });
+            L(InteropGenerated(gameDir)
+                ? "Jeu lancé. Menu des mods : F1."
+                : "Jeu lancé. PREMIER LANCEMENT : BepInEx prépare le jeu (1 à 3 minutes, l'écran peut rester noir), ne ferme pas la fenêtre.");
+        }
+
+        public static bool IsGameRunning() => Process.GetProcessesByName(Path.GetFileNameWithoutExtension(GameExe)).Length > 0;
+
+        // ───────────── Auto-mise à jour du launcher ─────────────
+
+        public static bool LauncherUpdateAvailable(Manifest m) =>
+            m.Launcher != null && Version.TryParse(m.Launcher.Version, out var v) && v > CurrentLauncherVersion;
+
+        /// <summary>Télécharge le nouveau launcher, remplace l'exe courant (renommé en .old) et le relance.</summary>
+        public async Task SelfUpdateAsync(Manifest m)
+        {
+            var exe = Assembly.GetExecutingAssembly().Location;
+            var tmp = exe + ".new";
+            L($"Mise à jour du launcher vers {m.Launcher.Version}…");
+            await DownloadAsync(Resolve(m.Launcher.Url), tmp).ConfigureAwait(false);
+            if (!string.Equals(Sha256Of(tmp), m.Launcher.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                File.Delete(tmp);
+                throw new InvalidDataException("Empreinte du nouveau launcher invalide, mise à jour annulée.");
+            }
+            var old = exe + ".old";
+            if (File.Exists(old)) File.Delete(old);
+            File.Move(exe, old);       // un exe en cours d'exécution peut être renommé sous Windows
+            File.Move(tmp, exe);
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+        }
+
+        public static void CleanupOldLauncher()
+        {
+            try
+            {
+                var old = Assembly.GetExecutingAssembly().Location + ".old";
+                if (File.Exists(old)) File.Delete(old);
+            }
+            catch { }
+        }
+
+        // ───────────── Utilitaires ─────────────
+
+        private async Task DownloadAsync(string url, string dest)
+        {
+            using (var resp = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false))
+            {
+                resp.EnsureSuccessStatusCode();
+                long total = resp.Content.Headers.ContentLength ?? -1;
+                using (var src = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false))
+                using (var fs = File.Create(dest))
+                {
+                    var buf = new byte[81920];
+                    long done = 0;
+                    int n, lastPct = -2;
+                    while ((n = await src.ReadAsync(buf, 0, buf.Length).ConfigureAwait(false)) > 0)
+                    {
+                        await fs.WriteAsync(buf, 0, n).ConfigureAwait(false);
+                        done += n;
+                        int pct = total > 0 ? (int)(done * 100 / total) : -1;
+                        if (pct != lastPct) { lastPct = pct; Progress?.Invoke(pct); }
+                    }
+                }
+            }
+        }
+
+        private static void ExtractOverwrite(string zip, string destDir)
+        {
+            using (var archive = ZipFile.OpenRead(zip))
+            {
+                var root = Path.GetFullPath(destDir);
+                foreach (var e in archive.Entries)
+                {
+                    var target = Path.GetFullPath(Path.Combine(destDir, e.FullName));
+                    if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue; // protection zip-slip
+                    if (string.IsNullOrEmpty(e.Name)) { Directory.CreateDirectory(target); continue; }
+                    Directory.CreateDirectory(Path.GetDirectoryName(target));
+                    e.ExtractToFile(target, true);
+                }
+            }
+        }
+    }
+}

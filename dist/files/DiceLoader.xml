@@ -1,0 +1,237 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>DiceLoader</name>
+    </assembly>
+    <members>
+        <member name="T:DiceLoader.DiceEvents">
+            <summary>
+            Événements globaux, une alternative aux méthodes virtuelles de <see cref="T:DiceLoader.DiceMod"/>.
+            Exemple : <c>DiceEvents.TurnStart += (battle, turn) => Game.Energy += 1;</c>
+            Pense à te désabonner dans OnDisable.
+            </summary>
+        </member>
+        <member name="T:DiceLoader.DiceModInfoAttribute">
+            <summary>
+            Métadonnées obligatoires d'un mod. À placer sur la classe qui hérite de <see cref="T:DiceLoader.DiceMod"/>.
+            </summary>
+        </member>
+        <member name="P:DiceLoader.DiceModInfoAttribute.Id">
+            <summary>Identifiant unique, ex. "com.moi.monmod".</summary>
+        </member>
+        <member name="T:DiceLoader.DiceModDependencyAttribute">
+            <summary>
+            Déclare qu'un mod dépend d'un autre mod (chargé avant lui).
+            </summary>
+        </member>
+        <member name="T:DiceLoader.DiceMod">
+            <summary>
+            Classe de base de tous les mods DiceLoader.
+            Surcharge seulement les méthodes dont tu as besoin.
+            Toutes les méthodes sont appelées sur le thread principal de Unity,
+            et chaque appel est protégé : une exception dans un mod ne fait pas planter le jeu ni les autres mods.
+            </summary>
+        </member>
+        <member name="P:DiceLoader.DiceMod.Logger">
+            <summary>Logger dédié (BepInEx/LogOutput.log + console).</summary>
+        </member>
+        <member name="P:DiceLoader.DiceMod.Config">
+            <summary>Fichier de config dédié : BepInEx/config/mods/&lt;id&gt;.cfg</summary>
+        </member>
+        <member name="P:DiceLoader.DiceMod.Harmony">
+            <summary>Instance Harmony dédiée (id = Info.Id). Défaite automatiquement quand le mod est désactivé.</summary>
+        </member>
+        <member name="P:DiceLoader.DiceMod.Directory">
+            <summary>Dossier contenant la DLL du mod (pour charger tes propres fichiers).</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnLoad">
+            <summary>Appelé une seule fois après le chargement de la DLL (même si le mod est désactivé). Déclare tes ConfigEntry ici.</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnEnable">
+            <summary>Appelé quand le mod est activé (au démarrage s'il est actif, ou via le menu F1). Applique tes patchs Harmony ici.</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnDisable">
+            <summary>Appelé quand le mod est désactivé via le menu. Les patchs de <see cref="P:DiceLoader.DiceMod.Harmony"/> sont retirés automatiquement après.</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnUpdate">
+            <summary>Chaque frame (MonoBehaviour.Update).</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnGUI">
+            <summary>Chaque appel IMGUI (MonoBehaviour.OnGUI). Pour dessiner ton propre overlay.</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnSettingsGUI">
+            <summary>Contenu de l'onglet du mod dans le menu DiceLoader (F1). Utilise <see cref="T:DiceLoader.UI"/>.</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnGameStateChanged(GameManager.GameState,GameManager.GameState)">
+            <summary>Changement d'état global de GameManager (TitleScreen, Map, BattleFloor, ShopFloor...).</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnRunStart(CurrentRunData,System.Boolean)">
+            <summary>Début d'une run (nouvelle run : loaded = false ; reprise d'une sauvegarde : loaded = true).</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnRunEnd(CurrentRunData,System.Boolean)">
+            <summary>Fin de run (victoire ou défaite).</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnFloorStart(FloorSystem)">
+            <summary>Début d'un « floor » (combat, événement, boutique, loot...).</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnFloorEnd(FloorSystem,System.Boolean)">
+            <summary>Fin d'un floor.</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnBattleStart(BattleSystem)">
+            <summary>Le combat commence (état Intro de BattleSystem).</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnTurnStart(BattleSystem,System.Int32)">
+            <summary>Début d'un tour du joueur.</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnTurnStateChanged(BattleSystem,BattleSystem.TurnState)">
+            <summary>Chaque changement d'état de la machine de tour de BattleSystem.</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnBattleEnd(BattleSystem,BattleSystem.EndState)">
+            <summary>Fin de combat (Win / Lose / ForceFinish).</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnEnemyDeath(Enemy)">
+            <summary>Un ennemi meurt.</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnPlayerDeath(Player)">
+            <summary>Le joueur meurt.</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnRelicAdded(ActiveRelic)">
+            <summary>Une relique (ou malédiction) est ajoutée.</summary>
+        </member>
+        <member name="M:DiceLoader.DiceMod.OnRelicRemoved(ActiveRelic)">
+            <summary>Une relique est retirée.</summary>
+        </member>
+        <member name="T:DiceLoader.Game">
+            <summary>
+            Façade haut niveau sur les systèmes du jeu (rétro-ingénierie de Die in the Dungeon 5.1.0).
+            Chaque accès est sûr : il renvoie null ou une valeur par défaut si le système n'existe pas encore,
+            par exemple sur l'écran titre.
+            Pour aller plus loin, utilise directement les classes du jeu (voir SDK/api/Classes.md).
+            </summary>
+        </member>
+        <member name="P:DiceLoader.Game.Manager">
+            <summary>Gestionnaire global : machine à états, chargement de scènes, runs.</summary>
+        </member>
+        <member name="P:DiceLoader.Game.Floor">
+            <summary>Système de floor : contient BattleSystem, EventController, LootController, ShopController et le joueur.</summary>
+        </member>
+        <member name="P:DiceLoader.Game.Dice">
+            <summary>Dés : pioche, main, défausse, exil, énergie, deck de la run.</summary>
+        </member>
+        <member name="P:DiceLoader.Game.Relics">
+            <summary>Reliques et malédictions du joueur.</summary>
+        </member>
+        <member name="P:DiceLoader.Game.Runestones">
+            <summary>Runes (runestones).</summary>
+        </member>
+        <member name="P:DiceLoader.Game.Currency">
+            <summary>Monnaie (affichage et animations).</summary>
+        </member>
+        <member name="P:DiceLoader.Game.Map">
+            <summary>Carte de la run.</summary>
+        </member>
+        <member name="P:DiceLoader.Game.Battle">
+            <summary>Système de combat courant.</summary>
+        </member>
+        <member name="P:DiceLoader.Game.Player">
+            <summary>Joueur courant (Cinder, Lisver, Nera, Mango).</summary>
+        </member>
+        <member name="P:DiceLoader.Game.Run">
+            <summary>Données de la run en cours : seed, stats, reliques choisies, or, difficulté...</summary>
+        </member>
+        <member name="P:DiceLoader.Game.Version">
+            <summary>Version du jeu, ex. "5.1.0".</summary>
+        </member>
+        <member name="P:DiceLoader.Game.DevMode">
+            <summary>Mode développeur caché du jeu : raccourcis de debug intégrés au GameManager.</summary>
+        </member>
+        <member name="M:DiceLoader.Game.AddGold(System.Int32)">
+            <summary>
+            Ajoute ou retire de l'or. Passe par CurrencySystem (avec l'animation de l'UI) quand c'est possible,
+            sinon modifie directement CurrentRunData.
+            </summary>
+        </member>
+        <member name="P:DiceLoader.Game.DiceDrawPerTurn">
+            <summary>Nombre de dés piochés par tour (valeur de base du DiceManager).</summary>
+        </member>
+        <member name="P:DiceLoader.Game.Deck">
+            <summary>Copie de la liste des dés du deck de la run.</summary>
+        </member>
+        <member name="P:DiceLoader.Game.Enemies">
+            <summary>Ennemis vivants dans la scène.</summary>
+        </member>
+        <member name="M:DiceLoader.Game.KillAllEnemies">
+            <summary>Tue tous les ennemis (commande de debug intégrée au jeu).</summary>
+        </member>
+        <member name="M:DiceLoader.Game.ForceFinishBattle">
+            <summary>Termine le combat immédiatement (commande de debug intégrée au jeu).</summary>
+        </member>
+        <member name="M:DiceLoader.Game.Safe``1(System.Func{``0})">
+            <summary>Exécute une fonction en avalant les exceptions IL2CPP, par exemple quand un objet a été détruit.</summary>
+        </member>
+        <member name="M:DiceLoader.Game.Schedule(System.Action,System.Single)">
+            <summary>Exécute une action à la frame suivante, ou après un délai en secondes, sur le thread Unity.</summary>
+        </member>
+        <member name="T:DiceLoader.UI">
+            <summary>
+            Petits wrappers IMGUI utilisables dans <see cref="M:DiceLoader.DiceMod.OnSettingsGUI"/>.
+            Sous IL2CPP, les méthodes GUILayout attendent un Il2CppReferenceArray&lt;GUILayoutOption&gt;.
+            Ces helpers le fournissent pour toi.
+            Méthodes disponibles dans le jeu (le reste a été strippé) : Label, Button, Toggle, TextArea, Space,
+            Begin/EndHorizontal, Begin/EndVertical, Begin/EndScrollView, Box.
+            </summary>
+        </member>
+        <member name="M:DiceLoader.UI.IntStepper(System.String,System.Int32,System.Int32,System.Int32,System.Int32)">
+            <summary>Entier modifiable avec des boutons − / +.</summary>
+        </member>
+        <member name="M:DiceLoader.UI.FloatStepper(System.String,System.Single,System.Single,System.Single,System.Single)">
+            <summary>Float modifiable avec des boutons − / +.</summary>
+        </member>
+        <member name="M:DiceLoader.UI.Text(System.String)">
+            <summary>Champ texte (TextArea mono-ligne : TextField est strippé dans ce build).</summary>
+        </member>
+        <member name="T:DiceLoader.Hooks">
+            <summary>
+            Hooks Harmony posés par le loader sur les méthodes clés du jeu. Ils alimentent <see cref="T:DiceLoader.DiceEvents"/>.
+            Chaque hook est appliqué séparément : si une méthode change dans une future version du jeu,
+            seul l'événement correspondant cesse de fonctionner.
+            Les paramètres utilisent __0, __1... (index) plutôt que leur nom, pour mieux résister aux mises à jour.
+            </summary>
+        </member>
+        <member name="T:DiceLoader.LoadedMod">
+            <summary>Un mod découvert dans le dossier Mods/.</summary>
+        </member>
+        <member name="P:DiceLoader.LoadedMod.Error">
+            <summary>Erreur de chargement ou d'exécution ; null si tout va bien.</summary>
+        </member>
+        <member name="T:DiceLoader.Loader">
+            <summary>Découverte, chargement, ordre des dépendances et activation/désactivation des mods.</summary>
+        </member>
+        <member name="M:DiceLoader.Loader.Get``1">
+            <summary>Retrouve un mod chargé par son id (pour l'interopérabilité entre mods).</summary>
+        </member>
+        <member name="M:DiceLoader.Loader.SetEnabled(DiceLoader.LoadedMod,System.Boolean)">
+            <summary>Active ou désactive un mod à chaud.</summary>
+        </member>
+        <member name="M:DiceLoader.Loader.ForEachEnabled(System.Action{DiceLoader.DiceMod},System.String)">
+            <summary>Appelle <paramref name="call"/> sur chaque mod actif, en isolant les exceptions.</summary>
+        </member>
+        <member name="T:DiceLoader.LoaderBehaviour">
+            <summary>
+            MonoBehaviour injecté dans IL2CPP via ClassInjector.
+            Il fait tourner Update/OnGUI pour les mods, détecte les changements d'état du GameManager
+            et dessine le menu DiceLoader.
+            </summary>
+        </member>
+        <member name="T:DiceLoader.Scheduler">
+            <summary>File d'actions différées, exécutée dans Update sur le thread Unity.</summary>
+        </member>
+        <member name="T:DiceLoader.Plugin">
+            <summary>
+            Point d'entrée : plugin BepInEx 6 (IL2CPP). BepInEx s'occupe de l'injection (Doorstop + CoreCLR)
+            et de l'interop. DiceLoader ajoute par-dessus le système de mods, les événements du jeu,
+            l'API <see cref="T:DiceLoader.Game"/> et le menu en jeu.
+            </summary>
+        </member>
+    </members>
+</doc>

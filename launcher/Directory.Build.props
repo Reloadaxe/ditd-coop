@@ -1,0 +1,3 @@
+<Project>
+  <!-- Coupe l'héritage du Directory.Build.props racine (références BepInEx/interop) : le launcher est une app Windows autonome. -->
+</Project>

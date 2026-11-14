@@ -1,0 +1,12 @@
+<Project>
+  <!-- Importé par chaque mod : référence DiceLoader et copie la DLL dans <jeu>\Mods\<NomDuMod>\ -->
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\DiceLoader\DiceLoader.csproj" Private="false" />
+  </ItemGroup>
+
+  <Target Name="DeployMod" AfterTargets="Build">
+    <MakeDir Directories="$(ModsDir)\$(AssemblyName)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModsDir)\$(AssemblyName)" />
+    <Message Importance="high" Text="Mod $(AssemblyName) -> $(ModsDir)\$(AssemblyName)" />
+  </Target>
+</Project>

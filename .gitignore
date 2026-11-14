@@ -1,0 +1,12 @@
+bin/
+obj/
+*.user
+.vs/
+*.suo
+
+# Dump du jeu : volumineux et dérivé du code du jeu. À regénérer en local (voir SDK/GUIDE.md).
+SDK/dump/
+SDK/api/Assembly-CSharp.cs
+
+# BepInEx est téléchargé par le launcher depuis builds.bepinex.dev
+vendor/

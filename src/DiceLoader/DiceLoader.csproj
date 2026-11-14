@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>DiceLoader</AssemblyName>
+    <RootNamespace>DiceLoader</RootNamespace>
+    <Version>1.0.0</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <!-- Le loader s'installe comme plugin BepInEx -->
+  <Target Name="DeployLoader" AfterTargets="Build">
+    <MakeDir Directories="$(BepInExDir)\plugins\DiceLoader" />
+    <Copy SourceFiles="$(TargetPath);$(TargetDir)$(TargetName).xml" DestinationFolder="$(BepInExDir)\plugins\DiceLoader" />
+    <MakeDir Directories="$(ModsDir)" />
+    <Message Importance="high" Text="DiceLoader -> $(BepInExDir)\plugins\DiceLoader" />
+  </Target>
+</Project>

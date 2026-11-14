@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>DevTools</AssemblyName>
+    <RootNamespace>DevTools</RootNamespace>
+  </PropertyGroup>
+  <Import Project="..\Mod.targets" />
+</Project>
