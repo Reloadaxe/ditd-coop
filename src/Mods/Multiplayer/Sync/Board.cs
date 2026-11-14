@@ -487,7 +487,7 @@ namespace DiceMultiplayer.Sync
         {
             if (_ghosts.Count == 0 || !Game.InBattle) return;
             var slots = UnityEngine.Object.FindObjectsOfType<BoardSlot>();
-            foreach (var g in _ghosts.Where(x => x.Go == null))
+            foreach (var g in _ghosts.Where(x => x.Go == null && x.Real == null && x.Failed))
             {
                 BoardSlot slot = null;
                 foreach (var s in slots) { var c = s.CurrentCoord; if (c.x == g.X && c.y == g.Y && s.gameObject.activeInHierarchy) { slot = s; break; } }

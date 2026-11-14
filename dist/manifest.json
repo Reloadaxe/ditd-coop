@@ -1,6 +1,6 @@
 {
-    "version":  "0.8.1",
-    "changelog":  "Correction des accents dans les textes du mod",
+    "version":  "0.8.2",
+    "changelog":  "Suppression du cadre noir avec le numéro sur les dés des autres joueurs",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "192e1b6397984d8f68263bd1a426b811d48f5b1dcea2c8ed14c9be2ff41041af",
+                      "sha256":  "52cd239415b71626a4eb6324afb1949640b85ba0523c2d0094a78d5117be8d35",
                       "size":  50176,
-                      "version":  "0.8.1"
+                      "version":  "0.8.2"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.8.1"
+                      "version":  "0.8.2"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "dd8faef7d2f8569e493dc560896b996e6c6a4db24d4fe9be63a3f9f13363d0cc",
+                      "sha256":  "b799c155ccad38b5e156ae2c0a2de3fddbacfd9102b95876c13d7e27a10b184f",
                       "size":  10752,
-                      "version":  "0.8.1",
+                      "version":  "0.8.2",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "72023ab5423116e7e0a41194a24084f6a60899ca80abe7c14b033c882f5e48ce",
+                      "sha256":  "d86ff9ec79332c2cd4c577320eb7052095f0376908179992253bc6b7395ab836",
                       "size":  8704,
-                      "version":  "0.8.1",
+                      "version":  "0.8.2",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "c583b61243a1a72749771ffa18afe8e58296298a4ae457153a90288f7e85c58f",
+                      "sha256":  "6095bf0c47fe1260d2b7bea9573a550c6cd038179ab6141071b1611b5d453102",
                       "size":  123904,
-                      "version":  "0.8.1"
+                      "version":  "0.8.2"
                   }
               ],
     "remove":  [
