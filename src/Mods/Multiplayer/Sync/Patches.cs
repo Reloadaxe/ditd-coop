@@ -88,6 +88,8 @@ namespace DiceMultiplayer.Sync
             P(h, typeof(GameObjectDice), nameof(GameObjectDice.Init), nameof(DiceInitPrefix));
             P(h, typeof(Player), "_Damage", nameof(PlayerDamagePostfix), postfix: true);
             P(h, typeof(Player), nameof(Player.Death), nameof(PlayerDeathPrefix));
+            P(h, typeof(DiceManager.DiceList), "get_RandomDice", nameof(RandomDicePostfix), postfix: true);
+            P(h, typeof(DiceManager), nameof(DiceManager.InitialEnergyPerTurn), nameof(InitialEnergyPostfix), postfix: true);
 
             // Diagnostic : qui remet la run à zéro ?
             foreach (var m in new[] { nameof(RunInfo.Reset), nameof(RunInfo.ExitRun), nameof(RunInfo.EndUnfinishedRun), nameof(RunInfo.EndRun) })
@@ -216,6 +218,14 @@ namespace DiceMultiplayer.Sync
         }
 
         private static bool PlayerDeathPrefix(Player __instance) => Heroes.OnPlayerDeath(__instance);
+
+        private static void RandomDicePostfix(DiceManager.DiceList __instance, ref ActiveDice __result)
+        {
+            try { Draw.OnRandomDice(__instance, ref __result); }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("RandomDicePostfix : " + e.Message); }
+        }
+
+        private static void InitialEnergyPostfix(ref int __result) => Draw.OnInitialEnergy(ref __result);
 
         private static void RunResetTrace(System.Reflection.MethodBase __originalMethod)
         {

@@ -1,6 +1,6 @@
 {
-    "version":  "0.3.0",
-    "changelog":  "Coop : un vrai héros par joueur (PV et bloc propres), les ennemis frappent tous les héros, K.O. puis 1 PV après victoire",
+    "version":  "0.3.1",
+    "changelog":  "Coop : héros des autres joueurs visibles, pioche par joueur, chacun ne voit que ses dés en main",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "a06d5c5287b756a35d17b7d2389605ee3222e80eda990d0ca3d75eecd8af61e2",
+                      "sha256":  "dfdc0a4bd0d83346f911e0c798667455975251551768b772ad2953a61b031b87",
                       "size":  50176,
-                      "version":  "0.3.0"
+                      "version":  "0.3.1"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.3.0"
+                      "version":  "0.3.1"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "1cd57e0a0291fa18146833760960d3ea4b2c53a49271ac371126f41da80fcc5b",
+                      "sha256":  "98f4db69f715f4ab625a0ab44d9d5661adcc5c6b77cb08b483b9fa07c4c515b2",
                       "size":  10752,
-                      "version":  "0.3.0",
+                      "version":  "0.3.1",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "276bc8865e410732e8e04147d26fb3dddcec957fd9b3302f7080e588814ddad4",
+                      "sha256":  "7c59faf91d98bcc59e8d3f8dda2491247401e99178342162b0c50df57f881206",
                       "size":  8704,
-                      "version":  "0.3.0",
+                      "version":  "0.3.1",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "5fde9a3ad3e1c46b8e17d95ee699002d2db83687064a32c764b395f80be077f6",
-                      "size":  75264,
-                      "version":  "0.3.0"
+                      "sha256":  "04385692b2fd4df3c2a9cf35be04c6b8788645bdca94c188ee2302426466db6b",
+                      "size":  80384,
+                      "version":  "0.3.1"
                   }
               ],
     "remove":  [

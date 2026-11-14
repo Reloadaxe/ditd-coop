@@ -12,7 +12,7 @@ namespace DiceMultiplayer
     /// Mod multijoueur coop (2 ou 3 joueurs) en TCP direct.
     /// Tout le monde joue la même run, synchronisée en lockstep sur les entrées. Voir Sync/Coop.cs.
     /// </summary>
-    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.3.0",
+    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.3.1",
         Author = "DiceModding", Description = "Coop à 2 ou 3 joueurs : chacun son personnage et ses dés, curseurs partagés (TCP).")]
     public class MultiplayerMod : DiceMod
     {
@@ -66,6 +66,7 @@ namespace DiceMultiplayer
             if (net == null) return;
             net.Pump();
             try { Heroes.Update(); } catch (Exception e) { Logger.LogDebug("Heroes : " + e.Message); }
+            try { Draw.UpdateHandVisibility(); } catch (Exception e) { Logger.LogDebug("Draw : " + e.Message); }
 
             if (Coop.Active && Time.unscaledTime >= _nextCursor)
             {
@@ -82,9 +83,14 @@ namespace DiceMultiplayer
 
         public override void OnFloorStart(FloorSystem floor) => Coop.OnFloorStarted();
 
+        public override void OnBattleStart(BattleSystem battle) => Draw.OnBattleStart();
+
+        public override void OnTurnStateChanged(BattleSystem battle, BattleSystem.TurnState state) => Draw.OnTurnState(state);
+
         public override void OnBattleEnd(BattleSystem battle, BattleSystem.EndState result)
         {
             Coop.ClearReady();
+            Draw.OnBattleEnd();
             if (result == BattleSystem.EndState.Win) Heroes.OnBattleWon();
         }
 

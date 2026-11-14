@@ -29,6 +29,7 @@ namespace DiceMultiplayer.Sync
             public ActiveEntity Data;
             public Player Entity;
             public bool KO;
+            public Vector3 Offset;
         }
 
         private static readonly Dictionary<int, Hero> _heroes = new Dictionary<int, Hero>();
@@ -71,6 +72,10 @@ namespace DiceMultiplayer.Sync
                              || Game.State == GameManager.GameState.ShopFloor || Game.State == GameManager.GameState.LootFloor);
             if (!scene) { DespawnAll(); return; }
 
+            // Chaque frame : chaque héros garde son décalage par rapport au héros de l'hôte (Enter() le ramènerait sur lui)
+            foreach (var hh in _heroes.Values)
+                if (hh.Entity != null) Game.Safe(() => { hh.Entity.transform.position = host.transform.position + hh.Offset; return 0; });
+
             if (Time.unscaledTime < _nextCheck) return;
             _nextCheck = Time.unscaledTime + 0.25f;
 
@@ -103,7 +108,8 @@ namespace DiceMultiplayer.Sync
                 if (sr != null) width = Math.Max(0.5f, sr.bounds.size.x);
                 float face = Game.Safe(() => host.FaceDirection);
                 if (Math.Abs(face) < 0.01f) face = 1f;
-                var pos = host.transform.position + new Vector3(-face * width * 0.9f * index, 0.05f * index, 0.01f * index);
+                h.Offset = new Vector3(-face * width * 0.9f * index, 0.05f * index, 0.01f * index);
+                var pos = host.transform.position + h.Offset;
 
                 var go = UnityEngine.Object.Instantiate(pd.prefab, pos, Quaternion.identity);
                 go.name = $"DIM_Hero_{h.PlayerId}";
@@ -115,8 +121,14 @@ namespace DiceMultiplayer.Sync
                 h.Entity = p;
                 try { p.LoadSkin((PlayerSkinData.Name)h.Pick.Run.Skin); } catch (Exception e) { Coop.AddLog("Skin : " + e.Message); }
                 p.LoadEntityData(h.Data);
+                // Comme pour le héros du jeu : initialisation puis animation d'entrée (sans elle le héros reste invisible)
+                try { p.Init(); } catch (Exception e) { Coop.AddLog("Init du héros : " + e.Message); }
+                try { p.Enter(); } catch (Exception e) { Coop.AddLog("Enter du héros : " + e.Message); }
+                p.LoadEntityData(h.Data);
 
-                foreach (var r in go.GetComponentsInChildren<SpriteRenderer>(true)) r.sortingOrder -= 2 * index;
+                var rends = go.GetComponentsInChildren<SpriteRenderer>(true);
+                MultiplayerMod.Instance.Logger.LogInfo($"[diag] Héros {h.PlayerId} : actif={go.activeInHierarchy} pos={go.transform.position} hôte={host.transform.position} " +
+                    $"échelle={go.transform.lossyScale} sprites={rends.Length} visibles={rends.Count(r => r.enabled && r.sprite != null)} parent={go.transform.parent?.name}");
                 Coop.AddLog($"Héros de {Coop.NameOf(h.PlayerId)} en jeu ({h.Data.CurrentHealth}/{h.Data.MaxHealth} PV{(h.KO ? ", K.O." : "")}).");
             }
             catch (Exception e)
