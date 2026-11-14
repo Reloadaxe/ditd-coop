@@ -291,8 +291,10 @@ namespace DiceMultiplayer.Sync
             AddLog($"[vote] Départ demandé : chemins possibles={options.Count} ({optDetail}) clic={Fmt(clicked)} destination={Fmt(desired)} " +
                    $"survol={Fmt(hovered)} clic carte récent={recentMapClick} dernier clic={_lastClickInfo}");
 
-            // Un seul chemin (ou aucun connu) : rien à décider, tout le monde avance de la même façon
-            if (options.Count <= 1) { AddLog("[vote] Un seul chemin possible : départ sans vote."); return true; }
+            // Aucun chemin connu : on laisse le jeu faire. Un seul chemin : c'est aussi un vote (le clic « continuer » vaut
+            // vote pour ce chemin), pour que personne ne parte seul
+            if (options.Count == 0) { AddLog("[vote] Aucun chemin connu : départ laissé au jeu."); return true; }
+            if (options.Count == 1) { _currentOptions = options; CastVote(options[0], auto: true); return false; }
 
             // Plusieurs chemins : on bloque, chez tout le monde, jusqu'au vote. La case survolée ne compte que si l'on vient
             // de cliquer sur la carte (sinon c'est un survol ancien, pas un choix).
@@ -337,7 +339,7 @@ namespace DiceMultiplayer.Sync
             Send(vote);
             vote.id = LocalId;
             OnVote(vote);
-            Toast(auto ? "Un seul chemin : départ dès que tout le monde est prêt" : change ? "Vote changé" : "Vote enregistré : en attente des autres joueurs (re-clique pour changer)");
+            Toast(auto ? "Vote enregistré : départ dès que tout le monde a voté" : change ? "Vote changé" : "Vote enregistré : en attente des autres joueurs (re-clique pour changer)");
         }
 
         /// <summary>Cases accessibles au prochain pas (Map.NextPlayerTiles, privée dans le jeu).</summary>
@@ -398,7 +400,11 @@ namespace DiceMultiplayer.Sync
             AddLog($"[vote] Choix du chemin : {options.Count} case(s) possible(s) ({detail})");
             SetClickables(options);
             if (options.Count == 0) return;
-            if (options.Count == 1) { CastVote(options[0], auto: true); return; }
+            if (options.Count == 1)
+            {
+                if (!_myVotePending) { _awaitingChoice = true; Toast("Un seul chemin : clique pour voter, vous partirez ensemble"); }
+                return;
+            }
             if (!_myVotePending) { _awaitingChoice = true; Toast("Plusieurs chemins : clique sur la case de ton choix pour voter"); }
         }
 
@@ -641,7 +647,7 @@ namespace DiceMultiplayer.Sync
             float left = ResolveAt - Time.unscaledTime;
             string status = left > 0 ? $"Tout le monde a voté : départ dans {Math.Ceiling(left):0} s… (clique ailleurs pour changer ton vote)"
                           : away.Count > 0 ? "En attente de " + string.Join(", ", away) + " (pas encore sur la carte)"
-                          : Votes.Count == 0 ? "Plusieurs chemins : clique sur la case de ton choix pour voter"
+                          : Votes.Count == 0 ? (_currentOptions.Count == 1 ? "Un seul chemin : clique pour voter, vous partirez ensemble" : "Plusieurs chemins : clique sur la case de ton choix pour voter")
                           : missing.Count > 0 ? "Votes manquants : " + string.Join(", ", missing) : "";
             if (status != "") GUI.Box(new Rect(Screen.width / 2f - 290, Screen.height - 46, 580, 28), status);
         }
