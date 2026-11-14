@@ -24,7 +24,8 @@ namespace DiceMultiplayer.Sync
             public int PlayerId;
             public GameObject Go;
             public Animator Anim;
-            public int LastState;
+            public int LastState, WantedState;
+            public float WantedTime;
             public Vector3 Offset;
             public int Hp, MaxHp, Block;
             public bool KO;
@@ -72,6 +73,17 @@ namespace DiceMultiplayer.Sync
             Coop.Send(new Msg { t = T.HeroState, h = hp, sx = max, sy = blk, flag = ko });
         }
 
+        private static int _lastLocalAnim;
+
+        /// <summary>Animation du héros d'un autre joueur : sa copie chez moi la jouera (même contrôleur d'animation).</summary>
+        public static void OnRemoteAnim(Msg m)
+        {
+            if (!_remotes.TryGetValue(m.id, out var r)) _remotes[m.id] = r = new Remote { PlayerId = m.id };
+            r.WantedState = (int)m.h;
+            r.WantedTime = m.x;
+            r.LastState = 0;   // rejouer même si c'est le même état (attaque répétée)
+        }
+
         public static void OnRemoteState(Msg m)
         {
             if (!_remotes.TryGetValue(m.id, out var r)) _remotes[m.id] = r = new Remote { PlayerId = m.id };
@@ -94,16 +106,28 @@ namespace DiceMultiplayer.Sync
             if (!InScene(local)) { DespawnAll(); return; }
             if (_local == null || _local.Pointer != local.Pointer) { DespawnAll(); _local = local; }
 
-            // Suivi de position et miroir d'animation, à chaque frame
-            int state = 0; float norm = 0;
+            // Animation de MON héros → réseau : chaque copie distante joue l'animation de son propre joueur
+            // (avant, elle rejouait la mienne : quand j'attaquais seul, la copie de l'autre attaquait aussi chez moi)
             var anim = Game.Safe(() => local.GetComponentInChildren<Animator>());
-            if (anim != null) { var info = anim.GetCurrentAnimatorStateInfo(0); state = info.fullPathHash; norm = info.normalizedTime % 1f; }
+            if (anim != null)
+            {
+                var info = anim.GetCurrentAnimatorStateInfo(0);
+                if (info.fullPathHash != 0 && info.fullPathHash != _lastLocalAnim)
+                {
+                    _lastLocalAnim = info.fullPathHash;
+                    Coop.Send(new Msg { t = T.HeroAnim, h = info.fullPathHash, x = info.normalizedTime % 1f });
+                }
+            }
             foreach (var r in _remotes.Values)
             {
                 if (r.Go == null) continue;
                 r.Go.transform.position = local.transform.position + r.Offset;
                 if (r.Go.activeSelf == r.KO) r.Go.SetActive(!r.KO);
-                if (r.Anim != null && state != 0 && state != r.LastState) { r.LastState = state; try { r.Anim.Play(state, 0, norm); } catch { } }
+                if (r.Anim != null && r.WantedState != 0 && r.WantedState != r.LastState)
+                {
+                    r.LastState = r.WantedState;
+                    try { r.Anim.Play(r.WantedState, 0, r.WantedTime); } catch { }
+                }
                 // Interface de vie du jeu, remplie avec l'état reçu du réseau
                 try
                 {

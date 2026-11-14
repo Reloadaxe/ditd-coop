@@ -99,6 +99,17 @@ namespace DiceMultiplayer.Sync
             try { return Game.Battle.GetBattleIndexOfEntity(e); } catch { return -1; }
         }
 
+        /// <summary>Dégâts prévus par MES dés sur cet ennemi (-1 si inconnu).</summary>
+        private static int LocalFor(Enemy e)
+        {
+            try
+            {
+                var values = Game.Battle?.BattleValues;
+                return values == null ? -1 : values.GetTargetActionAmountFromPlayer(DiceData.GeneralType.Attacks, e);
+            }
+            catch { return -1; }
+        }
+
         /// <summary>Somme des dégâts prévus par les AUTRES joueurs sur cet ennemi.</summary>
         private static int RemoteFor(Enemy e)
         {
@@ -117,7 +128,24 @@ namespace DiceMultiplayer.Sync
             {
                 if (!Coop.Active || __instance == null) return true;
                 if (!_inRefresh) _arrowLocal[__instance.Pointer] = __0;
-                __0 += RemoteFor(__instance.CurrentTargetEnemy);
+                var enemy = __instance.CurrentTargetEnemy;
+                // Avec des copies de dés des autres sur mon plateau, le nombre du jeu peut déjà compter une partie de
+                // leurs dégâts (ex. dégâts de zone sur les cibles secondaires), qui sont aussi dans l'aperçu reçu :
+                // on repart alors de MES actions seules (les copies en sont exclues), plus l'aperçu des autres.
+                if (Board.HasRealGhosts && enemy != null)
+                {
+                    int mine = LocalFor(enemy);
+                    if (mine >= 0) __0 = mine;
+                }
+                __0 += RemoteFor(enemy);
+                if (__0 <= 0 && Board.HasRealGhosts)
+                {
+                    // Rien à attaquer pour l'équipe : flèche en mode « cible seule » (sans compter la copie)
+                    bool was = _inRefresh;
+                    _inRefresh = true;
+                    try { __instance.ChangeToTargetOnly(); } finally { _inRefresh = was; }
+                    return false;
+                }
             }
             catch { }
             return true;

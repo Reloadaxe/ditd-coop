@@ -141,6 +141,7 @@ namespace DiceMultiplayer.Sync
                     case T.Hash: OnRemoteHash(m); break;
                     case T.Desync: DesyncWarning = m.text; AddLog("<color=#ff6060>" + m.text + "</color>"); break;
                     case T.HeroState: Heroes.OnRemoteState(m); break;
+                    case T.HeroAnim: Heroes.OnRemoteAnim(m); break;
                     case T.BoardPlace: Board.OnRemotePlace(m); break;
                     case T.BoardRemove: Board.OnRemoteRemove(m); break;
                     case T.BoardClear: Board.OnRemoteClear(m); break;

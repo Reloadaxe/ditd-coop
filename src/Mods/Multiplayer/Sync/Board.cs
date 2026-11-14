@@ -49,6 +49,7 @@ namespace DiceMultiplayer.Sync
 
         public static bool IsTakenByOther(int x, int y) => _ghosts.Any(g => g.X == x && g.Y == y && !g.Stale);
 
+        public static bool HasRealGhosts => _ghosts.Any(g => g.Real != null);
         public static bool IsGhostSlot(BoardSlot s) => s != null && _ghosts.Any(g => g.Real != null && g.Slot != null && g.Slot.Pointer == s.Pointer);
         public static bool IsGhostDice(GameObjectDice d) => d != null && _ghosts.Any(g => g.Real != null && g.Real.Pointer == d.Pointer);
 

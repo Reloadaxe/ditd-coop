@@ -17,6 +17,7 @@ namespace DiceMultiplayer.Net
         public const string StartRun = "startrun"; // hôte → tous : run (équipe fusionnée), picks, seed
         public const string Pick = "pick";         // tous : run (choix de personnage), flag = prêt
         public const string HeroState = "hero";    // tous : état de son héros (h = PV, sx = PV max, sy = bloc, flag = K.O.)
+        public const string HeroAnim = "hanim";   // tous : animation de mon héros (h = état, x = temps normalisé)
         public const string BoardPlace = "bplace"; // tous : dé posé (uid, sx, sy, text = nom, btn = valeur)
         public const string BoardRemove = "bremove"; // tous : dé retiré (uid)
         public const string BoardClear = "bclear"; // tous : plateau du joueur vidé (fin de tour)
