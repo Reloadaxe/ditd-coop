@@ -25,7 +25,7 @@ namespace DiceMultiplayer.Sync
         public sealed class Ghost
         {
             public int PlayerId, Uid, X, Y, Value, Face;
-            public string Name, Vis, Data;
+            public string Name, Vis, Data, Extra;
             public GameObject Go;
             public bool Failed;
             // Vrai dé du jeu posé dans la case (copie du dé distant) : participe aux interactions entre dés
@@ -84,6 +84,7 @@ namespace DiceMultiplayer.Sync
                     text = Game.Safe(() => ad.diceDataName) ?? "?", btn = Game.Safe(() => ad.CurrentFaceValue),
                     path = Game.Safe(() => ad.ToCompressedStringForRunHistory()),
                     h = Game.Safe(() => ad.faces.CurrentFaceIndex),
+                    comp = Game.Safe(() => $"m={(ad.canBeMirrored ? 1 : 0)};t={(int)ad.tier};r={(int)ad.rarity}"),
                     vis = Game.Safe(() => Snapshot(dice)),
                 });
             }, 0.35f);
@@ -160,7 +161,7 @@ namespace DiceMultiplayer.Sync
         {
             foreach (var old in _ghosts.Where(g => g.PlayerId == m.id && g.Uid == m.uid)) Destroy(old);
             _ghosts.RemoveAll(g => g.PlayerId == m.id && g.Uid == m.uid);
-            _ghosts.Add(new Ghost { PlayerId = m.id, Uid = m.uid, X = m.sx, Y = m.sy, Name = m.text, Value = m.btn, Vis = m.vis, Data = m.path, Face = (int)m.h });
+            _ghosts.Add(new Ghost { PlayerId = m.id, Uid = m.uid, X = m.sx, Y = m.sy, Name = m.text, Value = m.btn, Vis = m.vis, Data = m.path, Face = (int)m.h, Extra = m.comp });
         }
 
         public static void OnRemoteRemove(Msg m)
@@ -251,6 +252,7 @@ namespace DiceMultiplayer.Sync
 
             var ad = new ActiveDice(g.Data);
             ad.uid = _ghostUid--;
+            ApplyExtra(ad, g.Extra);
             try { ad.faces.SetFace(g.Face); } catch { }
 
             int energy = dm.CurrentEnergy;
@@ -416,6 +418,30 @@ namespace DiceMultiplayer.Sync
                 if (xy.Length == 2 && int.TryParse(xy[0], out var x) && int.TryParse(xy[1], out var y) && int.TryParse(kv[1], out var v)) d[(x, y)] = v;
             }
             _remoteVals[m.id] = d;
+        }
+
+        /// <summary>
+        /// Propriétés absentes de la chaîne compacte du dé (historique de run) : « peut être copié par un miroir », tier,
+        /// rareté. Sans « copiable », un dé miroir posé à côté de la copie ne la reflétait pas.
+        /// </summary>
+        private static void ApplyExtra(ActiveDice ad, string extra)
+        {
+            if (ad == null || string.IsNullOrEmpty(extra)) return;
+            foreach (var part in extra.Split(';'))
+            {
+                var kv = part.Split('=');
+                if (kv.Length != 2 || !int.TryParse(kv[1], out var v)) continue;
+                try
+                {
+                    switch (kv[0])
+                    {
+                        case "m": ad.canBeMirrored = v != 0; break;
+                        case "t": ad.tier = (DiceData.Tier)v; break;
+                        case "r": ad.rarity = (DiceData.Rarity)v; break;
+                    }
+                }
+                catch { }
+            }
         }
 
         /// <summary>Non cliquable, contour à la couleur du joueur.</summary>
