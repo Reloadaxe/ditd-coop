@@ -31,7 +31,15 @@ namespace DiceMultiplayer.Ui
         private static RectTransform _panel, _offline, _online, _playersRows;
         private static TMP_InputField _fName, _fPort, _fHost, _fChat;
         private static Text _status, _log;
-        private static Btn _cursorsBtn;
+        private static Btn _cursorsBtn, _difficultyBtn;
+        private static readonly float[] DifficultySteps = { 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f };
+
+        private static void CycleDifficulty()
+        {
+            var cur = M.HpPerExtraPlayer;
+            int i = Array.FindIndex(DifficultySteps, v => v > cur + 0.01f);
+            M.HpPerExtraPlayer = i < 0 ? DifficultySteps[0] : DifficultySteps[i];
+        }
         private static string _playersSig;
 
         // Écran d'attente
@@ -142,6 +150,8 @@ namespace DiceMultiplayer.Ui
             _playersRows.GetComponent<VerticalLayoutGroup>().spacing = 2;
             Hint(_online, "Nouvelle run : chacun choisit son personnage, puis la partie démarre quand tout le monde est prêt.");
             var r6 = Row(_online); Button(r6, "Quitter la partie", () => M.LeaveGame(), 96, 18);
+            var rd = Row(_online); _difficultyBtn = Button(rd, "", CycleDifficulty, 130, 16);
+            Hint(_online, "PV des ennemis selon le nombre de joueurs (choisi par l'hôte, figé au lancement de la run).");
             var r7 = Row(_online); _fChat = Field(r7, ""); Button(r7, "Envoyer", SendChat, 48, 16);
 
             // Commun
@@ -284,6 +294,12 @@ namespace DiceMultiplayer.Ui
 
             }
             _cursorsBtn.Label.Value = M.ShowCursors ? "Curseurs des autres : oui" : "Curseurs des autres : non";
+            if (net != null)
+            {
+                bool host = net.IsHost && !Game.InRun;
+                _difficultyBtn.Active = host;
+                if (host) _difficultyBtn.Label.Value = $"PV des ennemis : x{Scaling.FactorFor(Math.Max(2, net.Players.Count), M.HpPerExtraPlayer):0.##}";
+            }
             _log.Value = string.Join("\n", Coop.Log.Skip(Math.Max(0, Coop.Log.Count - 8)));
         }
 

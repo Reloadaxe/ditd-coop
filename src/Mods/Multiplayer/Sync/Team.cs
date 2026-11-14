@@ -98,7 +98,9 @@ namespace DiceMultiplayer.Sync
 
             RunPicks = Coop.Net.Players.OrderBy(p => p.Id).Select(p => new PlayerPick { Id = p.Id, Run = Picks[p.Id] }).ToList();
             int seed = new Random().Next(1000, int.MaxValue);
-            Coop.Send(new Msg { t = T.StartRun, seed = seed, picks = RunPicks });
+            Scaling.RunFactor = Scaling.FactorFor(RunPicks.Count, MultiplayerMod.Instance.HpPerExtraPlayer);
+            Coop.Send(new Msg { t = T.StartRun, seed = seed, picks = RunPicks, x = Scaling.RunFactor });
+            Coop.AddLog($"PV des ennemis ×{Scaling.RunFactor:0.##} ({RunPicks.Count} joueurs).");
             Coop.AddLog($"Tout le monde est prêt : lancement (seed {seed}).");
             StartOwnRun(seed);
         }
@@ -107,6 +109,8 @@ namespace DiceMultiplayer.Sync
         public static void OnStartRun(Msg m)
         {
             RunPicks = m.picks ?? new List<PlayerPick>();
+            Scaling.RunFactor = m.x > 0 ? m.x : 1f;
+            Coop.AddLog($"PV des ennemis ×{Scaling.RunFactor:0.##}.");
             Coop.AddLog($"Lancement par {Coop.NameOf(m.id)} (seed {m.seed}) : " +
                         string.Join(", ", RunPicks.Select(p => $"{Coop.NameOf(p.Id)} = {(Player.CharacterName)p.Run.Character}")));
             StartOwnRun(m.seed);
