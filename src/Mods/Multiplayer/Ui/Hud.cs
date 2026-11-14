@@ -408,7 +408,7 @@ namespace DiceMultiplayer.Ui
                 lbl.Active = true;
                 string ready = Coop.ReadyPlayers.Contains(id) ? "  <color=#c3ff96>prêt</color>" : "";
                 lbl.Value = $"<color={Coop.ColorOf(id)}>{Coop.NameOf(id)}</color>{ready}{(extra != null ? "  " + extra : "")}";
-                AtScreen(lbl.Rect, screen, new Vector2(0, 2));
+                AtScreen(lbl.Rect, screen, new Vector2(0, 1));
             }
             for (int i = labels.Count; i < _heroPool.Count; i++) _heroPool[i].Active = false;
         }

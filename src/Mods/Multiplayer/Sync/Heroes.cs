@@ -25,6 +25,7 @@ namespace DiceMultiplayer.Sync
             public GameObject Go;
             public Animator Anim;
             public int LastState, WantedState;
+            public RectTransform HealthAnchor;
             public float WantedTime;
             public Vector3 Offset;
             public int Hp, MaxHp, Block;
@@ -174,6 +175,7 @@ namespace DiceMultiplayer.Sync
                 if (ec != null)
                 {
                     r.HpText = Tmp(Game.Safe(() => ec.healthText));
+                    r.HealthAnchor = Game.Safe(() => ec.currentHealthDice);
                     r.HpTexts = AllTmp(Game.Safe(() => ec.healthText));
                     r.BlockText = Tmp(Game.Safe(() => ec.blockText));
                     r.BlockTexts = AllTmp(Game.Safe(() => ec.blockText));
@@ -281,7 +283,8 @@ namespace DiceMultiplayer.Sync
             var res = new List<(int, Vector2, string)>();
             var cam = Camera.main;
             if (cam == null || !Coop.Active || _local == null) return res;
-            var p = Above(cam, _local.transform);
+            var localHealth = Game.Safe(() => _local.MyEntityCanvas != null ? _local.MyEntityCanvas.currentHealthDice : null);
+            var p = TopOf(localHealth) ?? Above(cam, _local.transform);
             if (p != null) res.Add((Coop.LocalId, p.Value, null));
             foreach (var r in _remotes.Values)
             {
@@ -289,10 +292,29 @@ namespace DiceMultiplayer.Sync
                 var t = r.Go != null ? r.Go.transform : _local.transform;
                 string extra = r.KO ? "<color=#ff7a6b>K.O.</color>"
                              : r.HpText != null ? null : $"PV {r.Hp}/{r.MaxHp}" + (r.Block > 0 ? $"  Bloc {r.Block}" : "");
-                var s = Above(cam, t);
+                var s = (r.Go != null && r.Go.activeInHierarchy ? TopOf(r.HealthAnchor) : null) ?? Above(cam, t);
                 if (s != null) res.Add((r.PlayerId, s.Value + (r.Go == null ? new Vector2(0, 40) : Vector2.zero), extra));
             }
             return res;
+        }
+
+        /// <summary>Haut (centre) d'un élément d'interface du héros, en coordonnées écran : le nom se pose juste au-dessus de la vie.</summary>
+        private static Vector2? TopOf(RectTransform rt)
+        {
+            if (rt == null || !rt.gameObject.activeInHierarchy) return null;
+            try
+            {
+                var corners = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
+                rt.GetWorldCorners(corners);
+                var top = (corners[1] + corners[2]) * 0.5f;
+                var canvas = rt.GetComponentInParent<Canvas>();
+                if (canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay) return new Vector2(top.x, top.y);
+                var cam = canvas != null && canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+                if (cam == null) return null;
+                var sp = cam.WorldToScreenPoint(top);
+                return sp.z < 0 ? (Vector2?)null : new Vector2(sp.x, sp.y);
+            }
+            catch { return null; }
         }
 
         private static Vector2? Above(Camera cam, Transform t)

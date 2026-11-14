@@ -1,6 +1,6 @@
 {
-    "version":  "0.10.0",
-    "changelog":  "La phase ennemie attend que tous les joueurs aient fini d\u0027exécuter leurs dés",
+    "version":  "0.10.1",
+    "changelog":  "Nom des joueurs posé juste au-dessus de leur vie",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "d4703bb0e43d3a04f1e4eadcb7d80bf226f5128edf010f1ccb60072420b5001d",
+                      "sha256":  "9086108ac683b07bb975ecaf4a8d8ab8b6b1f4c52bf79dd438784dd229a61535",
                       "size":  50176,
-                      "version":  "0.10.0"
+                      "version":  "0.10.1"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.10.0"
+                      "version":  "0.10.1"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "e2d2a3a196abcbea29b153191b3c6713675e39aaec4ea66024945e9d16dfd77d",
+                      "sha256":  "eb30ff7e2e211bf50cb07078d46e62c0596652bffc2bed3c3358cca199e441c7",
                       "size":  10752,
-                      "version":  "0.10.0",
+                      "version":  "0.10.1",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "9def038db61b6425d02c2b643b12c12efee441da98195f14f30064c2e922017d",
+                      "sha256":  "58364bd011407d94b431bce904027fca0836f626e705569338578205a3812c51",
                       "size":  8704,
-                      "version":  "0.10.0",
+                      "version":  "0.10.1",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "15af3124df9f88d96615a19d5fcac034100e5183434718056e5f03cd8ad820a8",
-                      "size":  170496,
-                      "version":  "0.10.0"
+                      "sha256":  "70b88a053088d360130233ca59b947a7f0eabdc03b8be75ff1ca25b5f5a33bc8",
+                      "size":  171008,
+                      "version":  "0.10.1"
                   }
               ],
     "remove":  [
