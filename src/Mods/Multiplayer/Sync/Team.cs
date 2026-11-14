@@ -156,7 +156,16 @@ namespace DiceMultiplayer.Sync
             _decksMerged = true;
 
             int hostId = RunPicks[0].Id;
-            foreach (var d in Game.Deck) DiceOwners[d.uid] = hostId;
+            var hostDice = Game.Deck;
+            // Les uid du deck de départ peuvent être vides ou en double : on les rend uniques, chez tous au même moment
+            var uids = hostDice.Select(d => d.uid).ToList();
+            if (uids.Distinct().Count() != uids.Count || uids.Any(u => u <= 0))
+            {
+                foreach (var d in hostDice) d.uid = run.ProvideNewDiceUID();
+                Coop.AddLog($"[diag] uid du deck de l'hôte renumérotés ({string.Join(",", uids)} → {string.Join(",", hostDice.Select(d => d.uid))})");
+            }
+            foreach (var d in hostDice) DiceOwners[d.uid] = hostId;
+            Coop.AddLog($"[diag] Dés de {Coop.NameOf(hostId)} : uid {string.Join(",", hostDice.Select(d => d.uid))}");
 
             var difficulty = run.DifficultyLevel;
             foreach (var p in RunPicks.Skip(1))
@@ -177,7 +186,8 @@ namespace DiceMultiplayer.Sync
                         DiceOwners[ad.uid] = p.Id;
                         added++;
                     }
-                    Coop.AddLog($"Deck de {Coop.NameOf(p.Id)} ({(Player.CharacterName)p.Run.Character}) ajouté : {added} dés.");
+                    Coop.AddLog($"Deck de {Coop.NameOf(p.Id)} ({(Player.CharacterName)p.Run.Character}) ajouté : {added} dés, uid " +
+                                string.Join(",", DiceOwners.Where(kv => kv.Value == p.Id).Select(kv => kv.Key)));
                 }
                 catch (Exception e) { Coop.AddLog($"Ajout du deck de {Coop.NameOf(p.Id)} impossible : {e.Message}"); }
             }

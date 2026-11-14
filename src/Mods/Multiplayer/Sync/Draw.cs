@@ -35,6 +35,14 @@ namespace DiceMultiplayer.Sync
             dm.diceDrawPerTurn = _baseDraw.Value * Players;
             _drawIndex = 0;
             Coop.AddLog($"Pioche : {_baseDraw.Value} dés par joueur et par tour ({dm.diceDrawPerTurn} au total).");
+            Game.Schedule(() =>
+            {
+                var pile = Game.Safe(() => Game.Dice.diceInDrawPile.AllDice);
+                if (pile == null) return;
+                var parts = new List<string>();
+                foreach (var d in pile) parts.Add($"{d.uid}>{Coop.NameOf(Coop.OwnerOfDice(d.uid))}");
+                Coop.AddLog($"[diag] Pioche du combat ({parts.Count}) : {string.Join(" ", parts)}");
+            }, 0.2f);
         }
 
         public static void OnBattleEnd()
@@ -48,6 +56,20 @@ namespace DiceMultiplayer.Sync
         public static void OnTurnState(BattleSystem.TurnState s)
         {
             if (s == BattleSystem.TurnState.DrawDice || s == BattleSystem.TurnState.StartTurn) _drawIndex = 0;
+            if (s == BattleSystem.TurnState.SelectDice && Heroes.Enabled)
+                Game.Schedule(() =>
+                {
+                    var hand = Game.Safe(() => Game.Dice.GetAllGODicesOnHand());
+                    if (hand == null) return;
+                    int mine = 0, total = 0, hidden = 0;
+                    foreach (var d in hand)
+                    {
+                        total++;
+                        if (Coop.OwnsDice(d)) mine++;
+                        if (_hidden.TryGetValue(d.Pointer, out var hh) && hh) hidden++;
+                    }
+                    Coop.AddLog($"[diag] Main : {total} dés, {mine} à moi, {hidden} masqués (énergie {Game.Energy}).");
+                }, 0.5f);
         }
 
         // ───── Choix du dé tiré ─────
@@ -93,8 +115,9 @@ namespace DiceMultiplayer.Sync
                 if (d == null) continue;
                 bool hide = Game.Safe(() => d.IsOnHand) && !Coop.OwnsDice(d);
                 var key = d.Pointer;
-                if (_hidden.TryGetValue(key, out var was) && was == hide) continue;
-                SetVisible(d.gameObject, !hide);
+                bool changed = !_hidden.TryGetValue(key, out var was) || was != hide;
+                // Le jeu anime lui-même la transparence du dé : on la réimpose à chaque frame tant qu'il est masqué
+                if (hide || changed) SetVisible(d, !hide);
                 _hidden[key] = hide;
             }
         }
@@ -102,14 +125,17 @@ namespace DiceMultiplayer.Sync
         private static void RestoreAll()
         {
             foreach (var d in UnityEngine.Object.FindObjectsOfType<GameObjectDice>())
-                if (d != null && _hidden.TryGetValue(d.Pointer, out var h) && h) SetVisible(d.gameObject, true);
+                if (d != null && _hidden.TryGetValue(d.Pointer, out var h) && h) SetVisible(d, true);
             _hidden.Clear();
         }
 
-        private static void SetVisible(GameObject go, bool visible)
+        private static void SetVisible(GameObjectDice d, bool visible)
         {
-            foreach (var r in go.GetComponentsInChildren<Renderer>(true)) r.enabled = visible;
-            foreach (var g in go.GetComponentsInChildren<UnityEngine.UI.Graphic>(true)) g.enabled = visible;
+            var cg = Game.Safe(() => d.canvasGroup);
+            if (cg != null) { cg.alpha = visible ? 1f : 0f; cg.blocksRaycasts = visible; cg.interactable = visible; }
+            var vis = Game.Safe(() => d.visuals);
+            if (vis != null)
+                foreach (var r in vis.GetComponentsInChildren<Renderer>(true)) r.enabled = visible;
         }
     }
 }

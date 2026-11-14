@@ -103,12 +103,19 @@ namespace DiceMultiplayer.Sync
                 var pd = PlayerDataOf(h.Pick);
                 if (pd.prefab == null) { Coop.AddLog($"Prefab introuvable pour {(Player.CharacterName)h.Pick.Run.Character}"); return; }
 
-                float width = 1.6f;
-                var sr = host.GetComponentInChildren<SpriteRenderer>();
-                if (sr != null) width = Math.Max(0.5f, sr.bounds.size.x);
+                // Décalage derrière le héros de l'hôte, réduit tant qu'il sortirait du champ de la caméra
+                // (la largeur des sprites n'est pas fiable : un sprite d'effet élargit fortement les bounds)
                 float face = Game.Safe(() => host.FaceDirection);
                 if (Math.Abs(face) < 0.01f) face = 1f;
-                h.Offset = new Vector3(-face * width * 0.9f * index, 0.05f * index, 0.01f * index);
+                float step = 2.2f;
+                var cam = Camera.main;
+                for (int tries = 0; tries < 8 && cam != null; tries++)
+                {
+                    var vp = cam.WorldToViewportPoint(host.transform.position + new Vector3(-face * step * index, 0, 0));
+                    if (vp.x > 0.06f && vp.x < 0.94f) break;
+                    step *= 0.75f;
+                }
+                h.Offset = new Vector3(-face * step * index, 0.15f * index, 0.01f * index);
                 var pos = host.transform.position + h.Offset;
 
                 var go = UnityEngine.Object.Instantiate(pd.prefab, pos, Quaternion.identity);
