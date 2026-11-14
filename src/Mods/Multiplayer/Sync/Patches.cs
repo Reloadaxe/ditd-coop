@@ -83,6 +83,8 @@ namespace DiceMultiplayer.Sync
             // Carte : le choix de case est un vote (toutes les entrées passent par Map.ClickOnMapTile)
             P(h, typeof(Map), nameof(Map.ClickOnMapTile), nameof(MapTileClickPrefix));
             P(h, typeof(Map), nameof(Map.ChangeState), nameof(MapChangeStatePrefix));
+            // Embranchement pendant un déplacement : la flèche choisit la direction sans repasser par ChangeState
+            P(h, typeof(MapTileArrow), nameof(MapTileArrow.OnPointerClick), nameof(ArrowClickPostfix), postfix: true);
 
             // Récompenses, reliques, potions et main propres à chaque joueur (ennemis, combat, carte et dés restent communs)
             P(h, typeof(SeedSystem.Rng), nameof(SeedSystem.Rng.GetRandomRng), nameof(PersonalRngPostfix), postfix: true);
@@ -169,6 +171,12 @@ namespace DiceMultiplayer.Sync
 
         // ───── Fin de tour ─────
         private static bool FinishTurnPrefix() => Coop.OnLocalFinishTurn();
+
+        private static void ArrowClickPostfix()
+        {
+            try { Coop.OnArrowClicked(); }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("ArrowClickPostfix : " + e.Message); }
+        }
 
         private static bool MapChangeStatePrefix(Map.MapState __0)
         {

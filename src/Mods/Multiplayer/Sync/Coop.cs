@@ -309,6 +309,30 @@ namespace DiceMultiplayer.Sync
             }, 0.3f);
         }
 
+        /// <summary>
+        /// Postfix de MapTileArrow.OnPointerClick : à un embranchement pendant un déplacement, la flèche vient d'écrire
+        /// la destination. On la lit, on l'efface (le jeu continue d'attendre), et elle devient le vote du joueur.
+        /// </summary>
+        public static void OnArrowClicked()
+        {
+            if (!Active || Replaying || Time.unscaledTime < _allowMoveUntil) return;
+            var map = Game.Map;
+            var d = ReadDesired(map);
+            if (d == null) return;
+            ClearDesired(map);
+            var vote = new Msg { t = T.Vote, sx = d.Value.x, sy = d.Value.y };
+            Send(vote);
+            vote.id = LocalId;
+            OnVote(vote);
+            Toast("Vote enregistré : en attente des autres joueurs");
+        }
+
+        private static void ClearDesired(Map map)
+        {
+            try { map.desiredNextPlayerCoord = new Il2CppSystem.Nullable<Vector2Int>(); }
+            catch (Exception e) { AddLog("[vote] Effacement de la destination impossible : " + e.Message); }
+        }
+
         /// <summary>Champ privé Map.desiredNextPlayerCoord (Nullable&lt;Vector2Int&gt;) : la destination choisie par le joueur.</summary>
         private static Vector2Int? ReadDesired(Map map)
         {
