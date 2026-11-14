@@ -71,24 +71,49 @@ namespace DiceMultiplayer.Sync
             var c = slot.CurrentCoord;
             var taken = _ghosts.FirstOrDefault(g => g.X == c.x && g.Y == c.y && !g.Stale);
             if (taken != null) { Coop.Toast($"Case déjà prise par {Coop.NameOf(taken.PlayerId)}"); return false; }
-            var ad = Game.Safe(() => dice.CurrentActiveDice);
-            if (ad == null) return true;
             // Envoyé APRÈS la pose : le dé a alors son apparence de plateau (en main, il n'a pas le même rendu)
-            int key = Key(dice), x = c.x, y = c.y;
-            Game.Schedule(() =>
-            {
-                if (dice == null) return;
-                Coop.Send(new Msg
-                {
-                    t = T.BoardPlace, uid = key, sx = x, sy = y,
-                    text = Game.Safe(() => ad.diceDataName) ?? "?", btn = Game.Safe(() => ad.CurrentFaceValue),
-                    path = Game.Safe(() => ad.ToCompressedStringForRunHistory()),
-                    h = Game.Safe(() => ad.faces.CurrentFaceIndex),
-                    comp = Game.Safe(() => $"m={(ad.canBeMirrored ? 1 : 0)};t={(int)ad.tier};r={(int)ad.rarity}"),
-                    vis = Game.Safe(() => Snapshot(dice)),
-                });
-            }, 0.35f);
+            Game.Schedule(() => SendPlace(dice, c.x, c.y), 0.35f);
             return true;
+        }
+
+        private static void SendPlace(GameObjectDice dice, int x, int y)
+        {
+            if (dice == null) return;
+            var ad = Game.Safe(() => dice.CurrentActiveDice);
+            if (ad == null) return;
+            Coop.Send(new Msg
+            {
+                t = T.BoardPlace, uid = Key(dice), sx = x, sy = y,
+                text = Game.Safe(() => ad.diceDataName) ?? "?", btn = Game.Safe(() => ad.CurrentFaceValue),
+                path = Game.Safe(() => ad.ToCompressedStringForRunHistory()),
+                h = Game.Safe(() => ad.faces.CurrentFaceIndex),
+                comp = Game.Safe(() => $"m={(ad.canBeMirrored ? 1 : 0)};t={(int)ad.tier};r={(int)ad.rarity}"),
+                vis = Game.Safe(() => Snapshot(dice)),
+            });
+        }
+
+        /// <summary>
+        /// Début de la phase de choix des dés : je renvoie les dés restés sur MON plateau d'un tour à l'autre (dés lourds,
+        /// retenus…). En fin de tour, les autres retirent tous mes dés ; sans ce renvoi, ceux qui restent n'apparaissaient
+        /// plus chez eux.
+        /// </summary>
+        public static void ResendOwnDice()
+        {
+            if (!Coop.Active || !Game.InBattle) return;
+            int n = 0;
+            foreach (var s in UnityEngine.Object.FindObjectsOfType<BoardSlot>())
+            {
+                try
+                {
+                    if (!s.gameObject.activeInHierarchy || !s.HasPlacedDice || IsGhostSlot(s)) continue;
+                    if (!s.TryGetPlacedDice(out var dice) || dice == null || IsGhostDice(dice)) continue;
+                    var c = s.CurrentCoord;
+                    SendPlace(dice, c.x, c.y);
+                    n++;
+                }
+                catch { }
+            }
+            if (n > 0) Coop.AddLog($"[sync] {n} dé(s) resté(s) sur mon plateau renvoyé(s) aux autres.");
         }
 
         public static void OnLocalRemove(GameObjectDice dice)
