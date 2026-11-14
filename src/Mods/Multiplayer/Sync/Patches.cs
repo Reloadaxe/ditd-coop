@@ -106,7 +106,8 @@ namespace DiceMultiplayer.Sync
             P(h, typeof(TargetEnemyArrow), nameof(TargetEnemyArrow.ChangeToAttack), nameof(Preview.ArrowAttackPrefix), patchType: typeof(Preview));
             P(h, typeof(TargetEnemyArrow), nameof(TargetEnemyArrow.ChangeToTargetOnly), nameof(Preview.ArrowTargetOnlyPrefix), patchType: typeof(Preview));
 
-            // Récompenses, reliques, potions et main propres à chaque joueur (ennemis, combat, carte et dés restent communs)
+            // Récompenses, reliques, potions, main et dés (tirage de la pioche, lancers) propres à chaque joueur ;
+            // ennemis, combat et carte restent communs
             P(h, typeof(SeedSystem.Rng), nameof(SeedSystem.Rng.GetRandomRng), nameof(PersonalRngPostfix), postfix: true);
             // Pioche : tirée par SeedSystem.DiceRNG (commun). On garde l'appel (séquence commune alignée) mais le dé tiré
             // dans MA pioche est choisi par un générateur propre à chaque joueur
@@ -241,7 +242,7 @@ namespace DiceMultiplayer.Sync
         {
             if (!Coop.Active || __result == null) return;
             if (__0 != SeedSystem.Rng.Context.Reward && __0 != SeedSystem.Rng.Context.Relic
-                && __0 != SeedSystem.Rng.Context.Potion && __0 != SeedSystem.Rng.Context.Hand) return;
+                && __0 != SeedSystem.Rng.Context.Potion && __0 != SeedSystem.Rng.Context.Hand && __0 != SeedSystem.Rng.Context.Dice) return;
             int rank = Coop.LocalRank;
             if (rank <= 0) return;
             unchecked { __result = new Il2CppSystem.Random(__result.Next() ^ (rank * 0x5bd1e995) ^ ((int)__0 << 20)); }
