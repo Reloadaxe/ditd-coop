@@ -86,6 +86,9 @@ namespace DiceMultiplayer.Sync
 
             // Récompenses, reliques, potions et main propres à chaque joueur (ennemis, combat, carte et dés restent communs)
             P(h, typeof(SeedSystem.Rng), nameof(SeedSystem.Rng.GetRandomRng), nameof(PersonalRngPostfix), postfix: true);
+            // Pioche : tirée par SeedSystem.DiceRNG (commun). On garde l'appel (séquence commune alignée) mais le dé tiré
+            // dans MA pioche est choisi par un générateur propre à chaque joueur
+            P(h, typeof(DiceManager.DiceList), "get_RandomDice", nameof(PersonalDrawPostfix), postfix: true);
 
             // 5) Lancement de run et seed commune
             P(h, typeof(GameManager), nameof(GameManager.StartRun), nameof(StartRunPrefix));
@@ -183,6 +186,27 @@ namespace DiceMultiplayer.Sync
         /// Postfix de SeedSystem.Rng.GetRandomRng : pour les contextes personnels, le générateur est dérivé de celui du jeu
         /// et du rang du joueur. Déterministe pour chaque joueur, mais différent de l'un à l'autre. Rang 0 (hôte) : inchangé.
         /// </summary>
+        private static System.Random _drawRng;
+        private static int _drawRngSeed;
+
+        private static void PersonalDrawPostfix(DiceManager.DiceList __instance, ref ActiveDice __result)
+        {
+            try
+            {
+                if (!Coop.Active || __instance == null) return;
+                var pile = Game.Safe(() => Game.Dice.diceInDrawPile);
+                if (pile == null || pile.Pointer != __instance.Pointer) return;
+                var all = __instance.AllDice;
+                int n = all?.Count ?? 0;
+                if (n == 0) return;
+                int seed = Game.Safe(() => RunInfo.CurrentRun.Seed.seed);
+                int key = unchecked(seed ^ (Coop.LocalId + 1) * 0x2545F491);
+                if (_drawRng == null || _drawRngSeed != key) { _drawRng = new System.Random(key); _drawRngSeed = key; }
+                __result = all[_drawRng.Next(n)];
+            }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogDebug("PersonalDrawPostfix : " + e.Message); }
+        }
+
         private static void PersonalRngPostfix(SeedSystem.Rng.Context __0, ref Il2CppSystem.Random __result)
         {
             if (!Coop.Active || __result == null) return;
