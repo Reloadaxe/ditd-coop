@@ -19,6 +19,14 @@ namespace DiceMultiplayer
         public static MultiplayerMod Instance;
 
         private ConfigEntry<string> _name, _host, _localOnly;
+        private string _nameOverride;
+
+        /// <summary>Pseudo de cette instance : celui de -ditd-player s'il est fourni, sinon celui de la config.</summary>
+        private string LocalName
+        {
+            get => _nameOverride ?? _name.Value;
+            set { if (_nameOverride != null) _nameOverride = value; else _name.Value = value; }
+        }
         private ConfigEntry<int> _port;
         private ConfigEntry<bool> _rotateLeader, _showCursors, _showOwnership;
         private string _chat = "";
@@ -30,6 +38,10 @@ namespace DiceMultiplayer
         {
             Instance = this;
             _name = Config.Bind("Réseau", "Pseudo", Environment.UserName, "Ton nom affiché aux autres joueurs");
+            // Argument -ditd-player (test à plusieurs fenêtres) : pseudo propre à cette instance, gardé en mémoire seulement
+            var args = Environment.GetCommandLineArgs();
+            int ai = Array.FindIndex(args, a => string.Equals(a, "-ditd-player", StringComparison.OrdinalIgnoreCase));
+            if (ai >= 0 && ai + 1 < args.Length) _nameOverride = args[ai + 1];
             _host = Config.Bind("Réseau", "DernierHote", "127.0.0.1", "Adresse IP de l'hôte (LAN, Radmin VPN, ZeroTier, Tailscale…)");
             _port = Config.Bind("Réseau", "Port", 27015, "Port TCP");
             _rotateLeader = Config.Bind("Règles", "MeneurTournant", false, "Le meneur (carte, récompenses, boutique) change à chaque étage");
@@ -265,7 +277,7 @@ namespace DiceMultiplayer
         public override void OnSettingsGUI()
         {
             var net = Coop.Net;
-            UI.BeginRow(); UI.Label("Pseudo :"); _name.Value = UI.Text(_name.Value); UI.EndRow();
+            UI.BeginRow(); UI.Label("Pseudo :"); LocalName = UI.Text(LocalName); UI.EndRow();
 
             if (net == null)
             {
@@ -275,13 +287,13 @@ namespace DiceMultiplayer
                 UI.Label("Partage ton IP (locale, ou celle de Radmin VPN, ZeroTier ou Tailscale) et ouvre le port TCP dans le pare-feu.");
                 if (UI.Button("Créer la partie"))
                 {
-                    try { Coop.Attach(NetSession.Host(_port.Value, _name.Value)); Coop.AddLog($"Partie créée sur le port {_port.Value}"); }
+                    try { Coop.Attach(NetSession.Host(_port.Value, LocalName)); Coop.AddLog($"Partie créée sur le port {_port.Value}"); }
                     catch (Exception e) { Coop.AddLog("Impossible d'héberger : " + e.Message); }
                 }
                 UI.Space();
                 UI.Header("Rejoindre");
                 UI.BeginRow(); UI.Label("IP de l'hôte :"); _host.Value = UI.Text(_host.Value); UI.EndRow();
-                if (UI.Button("Rejoindre")) Coop.Attach(NetSession.Join(_host.Value.Trim(), _port.Value, _name.Value));
+                if (UI.Button("Rejoindre")) Coop.Attach(NetSession.Join(_host.Value.Trim(), _port.Value, LocalName));
             }
             else
             {
@@ -298,7 +310,7 @@ namespace DiceMultiplayer
                 if (UI.Button("Envoyer", 80) && !string.IsNullOrWhiteSpace(_chat))
                 {
                     Coop.Send(new Msg { t = T.Chat, text = _chat.Trim() });
-                    Coop.AddLog($"{_name.Value} : {_chat.Trim()}");
+                    Coop.AddLog($"{LocalName} : {_chat.Trim()}");
                     _chat = "";
                 }
                 UI.EndRow();

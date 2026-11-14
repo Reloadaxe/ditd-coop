@@ -84,6 +84,16 @@ namespace DiceMultiplayer.Sync
             P(h, typeof(SeedSystem), nameof(SeedSystem.StartRun), nameof(SeedStartRunPostfix), postfix: true);
             P(h, typeof(ActiveDeck), nameof(ActiveDeck.AddDice), nameof(DeckAddDicePostfix), postfix: true);
 
+            // Diagnostic : qui crée le premier Attack (son constructeur statique échoue) ?
+            _total++;
+            try
+            {
+                var ctor = typeof(Attack).GetConstructors().FirstOrDefault(c => c.GetParameters().Length == 6);
+                if (ctor != null) { h.Patch(ctor, prefix: new HarmonyMethod(typeof(Patches), nameof(AttackCtorProbe))); _ok++; }
+                else MultiplayerMod.Instance.Logger.LogWarning("Constructeur Attack introuvable");
+            }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("Sonde Attack : " + e.Message); }
+
             // Diagnostic : qui remet la run à zéro ?
             foreach (var m in new[] { nameof(RunInfo.Reset), nameof(RunInfo.ExitRun), nameof(RunInfo.EndUnfinishedRun), nameof(RunInfo.EndRun) })
                 P(h, typeof(RunInfo), m, nameof(RunResetTrace));
@@ -177,6 +187,18 @@ namespace DiceMultiplayer.Sync
         private static bool StartRunPrefix(RunInfo.NewRunData __0, ActiveCustomRun __1) => Team.OnLocalStartRun(__0, __1);
 
         private static void DeckAddDicePostfix(ActiveDice __0) => Team.OnDiceAddedToDeck(__0);
+
+        private static int _attackProbeCount;
+
+        private static void AttackCtorProbe(int __0, int __1, bool __2, bool __5)
+        {
+            if (_attackProbeCount++ >= 3) return;   // les 3 premiers appels suffisent
+            string stack;
+            try { stack = UnityEngine.StackTraceUtility.ExtractStackTrace(); } catch (Exception e) { stack = "(pile indisponible : " + e.Message + ")"; }
+            MultiplayerMod.Instance.Logger.LogWarning(
+                $"[diag] new Attack #{_attackProbeCount}(dmg={__0}, hits={__1}, forceKill={__2}, ignoreEndless={__5}) " +
+                $"état={DiceLoader.Game.State} run={(RunInfo.CurrentRun != null ? "présente" : "ABSENTE")} coop={(Coop.Active ? "oui" : "non")}\n{stack}");
+        }
 
         private static void RunResetTrace(System.Reflection.MethodBase __originalMethod)
         {

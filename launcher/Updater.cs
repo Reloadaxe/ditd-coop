@@ -188,7 +188,7 @@ namespace DitdLauncher
             {
                 // -ditd-window : DiceLoader réimpose taille et position quand le jeu réapplique ses réglages d'affichage au menu
                 var psi = new ProcessStartInfo(Path.Combine(gameDir, GameExe),
-                    $"-screen-fullscreen 0 -window-mode windowed -screen-width {cw} -screen-height {ch} -ditd-window {area.Left + i * w} {area.Top} {w} {h}")
+                    $"-screen-fullscreen 0 -window-mode windowed -screen-width {cw} -screen-height {ch} -ditd-window {area.Left + i * w} {area.Top} {w} {h} -ditd-player J{i + 1}")
                 { WorkingDirectory = gameDir, UseShellExecute = false };
                 procs.Add(Process.Start(psi));
                 L($"Instance {i + 1}/{count} lancée (PID {procs[i].Id}).");
