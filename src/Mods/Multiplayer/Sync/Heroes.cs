@@ -39,6 +39,7 @@ namespace DiceMultiplayer.Sync
         private static Player _local;
         private static float _nextSend, _nextCheck;
         private static string _lastSent;
+        private static int _diagCount;
 
         public static IEnumerable<Remote> All => _remotes.Values;
 
@@ -72,6 +73,11 @@ namespace DiceMultiplayer.Sync
         public static void OnRemoteState(Msg m)
         {
             if (!_remotes.TryGetValue(m.id, out var r)) _remotes[m.id] = r = new Remote { PlayerId = m.id };
+            if (r.LastUpdate == 0 || (r.Hp != (int)m.h && _diagCount < 6))
+            {
+                _diagCount++;
+                Coop.AddLog($"[diag] État reçu de {Coop.NameOf(m.id)} : {m.h}/{m.sx} PV, bloc {m.sy}{(m.flag ? ", K.O." : "")}");
+            }
             r.Hp = (int)m.h; r.MaxHp = m.sx; r.Block = m.sy; r.KO = m.flag; r.LastUpdate = Time.unscaledTime;
         }
 
@@ -195,7 +201,9 @@ namespace DiceMultiplayer.Sync
                 UnityEngine.Object.Destroy(holder);
                 go.SetActive(true);
                 r.Go = go;
-                Coop.AddLog($"Héros de {Coop.NameOf(pick.Id)} affiché ({(Player.CharacterName)pick.Run.Character}).");
+                Coop.AddLog($"Héros de {Coop.NameOf(pick.Id)} affiché ({(Player.CharacterName)pick.Run.Character}). " +
+                            $"[diag] UI de vie : texte PV {(r.HpText != null ? $"trouvé (« {Game.Safe(() => r.HpText.text)} », objet {r.HpText.name})" : "INTROUVABLE")}, " +
+                            $"bloc {(r.BlockText != null ? "trouvé" : "introuvable")}, format local {(r.HpWithMax ? "pv/max" : "pv")}");
             }
             catch (Exception e) { Coop.AddLog($"Affichage du héros de {Coop.NameOf(pick.Id)} impossible : {e.Message}"); }
         }

@@ -80,6 +80,12 @@ namespace DiceMultiplayer.Sync
             // 4) Ennemis partagés : mes dégâts sont envoyés aux autres
             P(h, typeof(Enemy), "_Damage", nameof(EnemyDamagePostfix), postfix: true);
 
+            // Carte : le choix de case est un vote (toutes les entrées passent par Map.ClickOnMapTile)
+            P(h, typeof(Map), nameof(Map.ClickOnMapTile), nameof(MapTileClickPrefix));
+
+            // Récompenses, reliques, potions et main propres à chaque joueur (ennemis, combat, carte et dés restent communs)
+            P(h, typeof(SeedSystem.Rng), nameof(SeedSystem.Rng.GetRandomRng), nameof(PersonalRngPostfix), postfix: true);
+
             // 5) Lancement de run et seed commune
             P(h, typeof(GameManager), nameof(GameManager.StartRun), nameof(StartRunPrefix));
             P(h, typeof(GameManager), nameof(GameManager.LoadRun), nameof(LoadRunPrefix));
@@ -159,6 +165,26 @@ namespace DiceMultiplayer.Sync
 
         // ───── Fin de tour ─────
         private static bool FinishTurnPrefix() => Coop.OnLocalFinishTurn();
+
+        private static bool MapTileClickPrefix(VisualMapTile __0)
+        {
+            try { return Coop.OnMapTileClick(__0); }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("MapTileClickPrefix : " + e.Message); return true; }
+        }
+
+        /// <summary>
+        /// Postfix de SeedSystem.Rng.GetRandomRng : pour les contextes personnels, le générateur est dérivé de celui du jeu
+        /// et du rang du joueur. Déterministe pour chaque joueur, mais différent de l'un à l'autre. Rang 0 (hôte) : inchangé.
+        /// </summary>
+        private static void PersonalRngPostfix(SeedSystem.Rng.Context __0, ref Il2CppSystem.Random __result)
+        {
+            if (!Coop.Active || __result == null) return;
+            if (__0 != SeedSystem.Rng.Context.Reward && __0 != SeedSystem.Rng.Context.Relic
+                && __0 != SeedSystem.Rng.Context.Potion && __0 != SeedSystem.Rng.Context.Hand) return;
+            int rank = Coop.LocalRank;
+            if (rank <= 0) return;
+            unchecked { __result = new Il2CppSystem.Random(__result.Next() ^ (rank * 0x5bd1e995) ^ ((int)__0 << 20)); }
+        }
 
         // ───── Plateau ─────
         private static bool PlaceDicePrefix(BoardSlot __0, GameObjectDice __1, BattleBoard.PlaceDiceContext __3)

@@ -53,12 +53,18 @@ namespace DiceMultiplayer.Sync
             if (taken != null) { Coop.Toast($"Case déjà prise par {Coop.NameOf(taken.PlayerId)}"); return false; }
             var ad = Game.Safe(() => dice.CurrentActiveDice);
             if (ad == null) return true;
-            Coop.Send(new Msg
+            // Instantané pris APRÈS la pose : le dé a alors son apparence de plateau (en main, il n'a pas le même rendu)
+            int key = Key(dice), x = c.x, y = c.y;
+            Game.Schedule(() =>
             {
-                t = T.BoardPlace, uid = Key(dice), sx = c.x, sy = c.y,
-                text = Game.Safe(() => ad.diceDataName) ?? "?", btn = Game.Safe(() => ad.CurrentFaceValue),
-                vis = Game.Safe(() => Snapshot(dice)),
-            });
+                if (dice == null) return;
+                Coop.Send(new Msg
+                {
+                    t = T.BoardPlace, uid = key, sx = x, sy = y,
+                    text = Game.Safe(() => ad.diceDataName) ?? "?", btn = Game.Safe(() => ad.CurrentFaceValue),
+                    vis = Game.Safe(() => Snapshot(dice)),
+                });
+            }, 0.35f);
             return true;
         }
 
@@ -226,18 +232,37 @@ namespace DiceMultiplayer.Sync
             UnityEngine.Object.Destroy(holder);
             go.SetActive(true);
 
-            // Palette de couleurs selon le type du dé, comme le jeu
-            if (types != null && types.Length > 0)
-                foreach (var sc in go.GetComponentsInChildren<SwapColor>(true))
-                    try
-                    {
-                        if (types.Length >= 2) sc.Swap((DiceData.Type)types[0], (DiceData.Type)types[1], false);
-                        else sc.Swap((DiceData.Type)types[0], false);
-                    }
-                    catch { }
-
-            AddHalo(go, haloPath, g.PlayerId);
+            // Palette de couleurs selon le type du dé, comme le jeu, puis contour (BorderColor) à la couleur du joueur
+            var playerColor = ParseHex(Coop.ColorOf(g.PlayerId));
+            foreach (var sc in go.GetComponentsInChildren<SwapColor>(true))
+            {
+                try
+                {
+                    if (types != null && types.Length >= 2) sc.Swap((DiceData.Type)types[0], (DiceData.Type)types[1], false);
+                    else if (types != null && types.Length == 1) sc.Swap((DiceData.Type)types[0], false);
+                }
+                catch { }
+                SetBorderColor(sc, playerColor);
+            }
             return go;
+        }
+
+        /// <summary>
+        /// Contour du dé à la couleur du joueur : entrée BorderColor (49) de la palette SwapColor.
+        /// ExecuteSwapColor est privée dans le jeu, d'où l'appel par réflexion, suivi d'un Apply de la texture de palette.
+        /// </summary>
+        private static void SetBorderColor(SwapColor sc, Color color)
+        {
+            try
+            {
+                var m = typeof(SwapColor).GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
+                    .FirstOrDefault(x => x.Name == "ExecuteSwapColor" && x.GetParameters().Length == 2 && x.GetParameters()[0].ParameterType == typeof(SwapColor.SwapIndex));
+                if (m == null) return;
+                m.Invoke(sc, new object[] { SwapColor.SwapIndex.BorderColor, color });
+                var tex = Game.Safe(() => sc.colorSwapTexture);
+                if (tex != null) tex.Apply();
+            }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogDebug("Contour : " + e.Message); }
         }
 
         /// <summary>Halo léger : copie de l'image principale, un peu plus grande, teintée à la couleur du joueur, derrière le dé.</summary>
