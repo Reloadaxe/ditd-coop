@@ -1,6 +1,6 @@
 {
-    "version":  "0.6.0",
-    "changelog":  "Coop : aperçu des dégâts prévus par les autres joueurs sur chaque ennemi, avec total d\u0027équipe",
+    "version":  "0.6.1",
+    "changelog":  "Les dégâts prévus des autres joueurs s\u0027ajoutent au nombre de la flèche de cible de l\u0027ennemi",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "16fab09a5582e1db3e736cd5856ad3eadc88e6f0199cf6c08a21fd59ecff00c0",
+                      "sha256":  "f44fbc046b7a146395f8a156177b4e163ab976b2c2fdfd7b028757f8d8175fa0",
                       "size":  50176,
-                      "version":  "0.6.0"
+                      "version":  "0.6.1"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.6.0"
+                      "version":  "0.6.1"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "cfeec1d0d3a4deaf76c8cd37f0f859b0f2ed02476d46bc4e2ea0eef3cdbc56a1",
+                      "sha256":  "40d25d5da5dfb49e483b820606bda0fcf710e22d4c106d819a2f0cee84eb91b4",
                       "size":  10752,
-                      "version":  "0.6.0",
+                      "version":  "0.6.1",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "a958bafdacd6615dceba40fbe9d353ac8832558ea7d02dd3e44c75dc4e45b6a7",
+                      "sha256":  "5ce506cdbf867c1371fe7864d6471a33b9da8550a6f18ada7e58368604a3ab21",
                       "size":  8704,
-                      "version":  "0.6.0",
+                      "version":  "0.6.1",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "0d88b593501e1b49f45bd37538751a91eedd9cca0f3d34b5b021e98dc54500f7",
-                      "size":  112128,
-                      "version":  "0.6.0"
+                      "sha256":  "de2c897359da5a0f3218b70db332fd91ab4c8fdaa64a6ca7049170ea5b9a50ab",
+                      "size":  114176,
+                      "version":  "0.6.1"
                   }
               ],
     "remove":  [

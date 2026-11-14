@@ -88,6 +88,10 @@ namespace DiceMultiplayer.Sync
             // Embranchement pendant un déplacement : la flèche choisit la direction sans repasser par ChangeState
             P(h, typeof(MapTileArrow), nameof(MapTileArrow.OnPointerClick), nameof(ArrowClickPrefix));
 
+            // Aperçu des dégâts : la flèche de cible au-dessus de l'ennemi affiche aussi les dégâts des autres joueurs.
+            P(h, typeof(TargetEnemyArrow), nameof(TargetEnemyArrow.ChangeToAttack), nameof(Preview.ArrowAttackPrefix), patchType: typeof(Preview));
+            P(h, typeof(TargetEnemyArrow), nameof(TargetEnemyArrow.ChangeToTargetOnly), nameof(Preview.ArrowTargetOnlyPrefix), patchType: typeof(Preview));
+
             // Récompenses, reliques, potions et main propres à chaque joueur (ennemis, combat, carte et dés restent communs)
             P(h, typeof(SeedSystem.Rng), nameof(SeedSystem.Rng.GetRandomRng), nameof(PersonalRngPostfix), postfix: true);
             // Pioche : tirée par SeedSystem.DiceRNG (commun). On garde l'appel (séquence commune alignée) mais le dé tiré

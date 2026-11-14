@@ -12,37 +12,54 @@ namespace DiceMultiplayer.Sync
     ///
     /// Chez chaque joueur, le jeu calcule l'aperçu de SON plateau (BattleSystem.BattleValues). On lit, pour chaque ennemi,
     /// les dégâts prévus (GetTargetActionAmountFromPlayer(Attacks, ennemi)) et on les envoie quand ils changent.
-    /// Chez les autres, au-dessus de chaque ennemi : une ligne par joueur à sa couleur, plus le total de l'équipe.
+    ///
+    /// Chez les autres, les dégâts reçus sont AJOUTÉS au nombre du jeu : la flèche de cible (TargetEnemyArrow) au-dessus
+    /// de l'ennemi. On intercepte ChangeToAttack (valeur + dégâts des autres) et ChangeToTargetOnly (si les autres
+    /// attaquent cet ennemi, on passe quand même en mode attaque). Quand un aperçu distant change, on rejoue la
+    /// dernière valeur locale pour rafraîchir le nombre.
+    /// Ennemi visé par un autre mais pas par moi (pas de flèche) : petite étiquette « ⚔ X » à la couleur du joueur.
     /// </summary>
     public static class Preview
     {
         /// <summary>id du joueur → (index de combat de l'ennemi → dégâts prévus).</summary>
         private static readonly Dictionary<int, Dictionary<int, int>> _remote = new Dictionary<int, Dictionary<int, int>>();
+        /// <summary>Flèche (pointeur natif) → dernière valeur locale demandée par le jeu (-1 = mode cible seule).</summary>
+        private static readonly Dictionary<IntPtr, int> _arrowLocal = new Dictionary<IntPtr, int>();
         private static string _lastSent;
         private static float _nextCompute;
-        private static Dictionary<int, int> _local = new Dictionary<int, int>();
+        private static bool _dirty;
+        private static bool _inRefresh;
+        private static TargetEnemySystem _system;
 
         public static void Reset()
         {
+            bool had = _remote.Count > 0;
             _remote.Clear();
-            _local.Clear();
             _lastSent = null;
+            if (had) _dirty = true;
         }
 
         // ───── Mon aperçu → réseau ─────
 
         public static void Update()
         {
-            if (!Coop.Active || !Game.InBattle) { if (_remote.Count > 0 || _local.Count > 0) Reset(); return; }
+            if (!Coop.Active || !Game.InBattle)
+            {
+                if (_remote.Count > 0) Reset();
+                _arrowLocal.Clear();
+                _system = null;
+                return;
+            }
+            if (_dirty) { _dirty = false; RefreshArrows(); }
             if (Time.unscaledTime < _nextCompute) return;
             _nextCompute = Time.unscaledTime + 0.3f;
 
             var st = Game.TurnState;
             bool planning = st == BattleSystem.TurnState.SelectDice || st == BattleSystem.TurnState.PerformFlashDice
                             || st == BattleSystem.TurnState.UseRunestones || st == BattleSystem.TurnState.EnemyPhaseBeforePlayer;
-            _local = planning ? ComputeLocal() : new Dictionary<int, int>();
+            var local = planning ? ComputeLocal() : new Dictionary<int, int>();
 
-            var text = string.Join(";", _local.Where(kv => kv.Value > 0).OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}:{kv.Value}"));
+            var text = string.Join(";", local.Where(kv => kv.Value > 0).OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}:{kv.Value}"));
             if (text == _lastSent) return;
             _lastSent = text;
             Coop.Send(new Msg { t = T.Preview, text = text });
@@ -63,7 +80,7 @@ namespace DiceMultiplayer.Sync
             return res;
         }
 
-        // ───── Réseau → affichage ─────
+        // ───── Réseau → nombre du jeu ─────
 
         public static void OnRemote(Msg m)
         {
@@ -74,42 +91,116 @@ namespace DiceMultiplayer.Sync
                 if (f.Length == 2 && int.TryParse(f[0], out var idx) && int.TryParse(f[1], out var dmg)) d[idx] = dmg;
             }
             _remote[m.id] = d;
+            _dirty = true;
         }
 
-        /// <summary>OnGUI, phase Repaint : au-dessus de chaque ennemi, l'aperçu de chaque autre joueur et le total.</summary>
+        private static int SafeIdx(Enemy e)
+        {
+            try { return Game.Battle.GetBattleIndexOfEntity(e); } catch { return -1; }
+        }
+
+        /// <summary>Somme des dégâts prévus par les AUTRES joueurs sur cet ennemi.</summary>
+        private static int RemoteFor(Enemy e)
+        {
+            if (e == null || _remote.Count == 0) return 0;
+            int idx = SafeIdx(e);
+            if (idx < 0) return 0;
+            int sum = 0;
+            foreach (var kv in _remote)
+                if (kv.Key != Coop.LocalId && kv.Value.TryGetValue(idx, out var dmg)) sum += dmg;
+            return sum;
+        }
+
+        public static bool ArrowAttackPrefix(TargetEnemyArrow __instance, ref int __0)
+        {
+            try
+            {
+                if (!Coop.Active || __instance == null) return true;
+                if (!_inRefresh) _arrowLocal[__instance.Pointer] = __0;
+                __0 += RemoteFor(__instance.CurrentTargetEnemy);
+            }
+            catch { }
+            return true;
+        }
+
+        public static bool ArrowTargetOnlyPrefix(TargetEnemyArrow __instance)
+        {
+            try
+            {
+                if (!Coop.Active || __instance == null) return true;
+                if (!_inRefresh) _arrowLocal[__instance.Pointer] = -1;
+                if (RemoteFor(__instance.CurrentTargetEnemy) > 0)
+                {
+                    bool was = _inRefresh;
+                    _inRefresh = true;
+                    try { __instance.ChangeToAttack(0); } finally { _inRefresh = was; }
+                    return false;
+                }
+            }
+            catch { }
+            return true;
+        }
+
+        private static IEnumerable<TargetEnemyArrow> Arrows()
+        {
+            if (_system == null) _system = UnityEngine.Object.FindObjectOfType<TargetEnemySystem>();
+            if (_system == null) yield break;
+            foreach (var a in new[] { _system.mainTargetArrow, _system.secondaryTargetArrow1, _system.secondaryTargetArrow2, _system.secondaryTargetArrow3 })
+                if (a != null) yield return a;
+        }
+
+        /// <summary>Un aperçu distant a changé : on rejoue la dernière valeur locale de chaque flèche visible.</summary>
+        private static void RefreshArrows()
+        {
+            foreach (var a in Arrows())
+            {
+                try
+                {
+                    if (!a.gameObject.activeInHierarchy || a.CurrentTargetEnemy == null) continue;
+                    if (!_arrowLocal.TryGetValue(a.Pointer, out var local)) local = -1;
+                    _inRefresh = true;
+                    if (local >= 0) a.ChangeToAttack(local);
+                    else a.ChangeToTargetOnly();
+                }
+                catch (Exception e) { MultiplayerMod.Instance.Logger.LogDebug("Preview arrow : " + e.Message); }
+                finally { _inRefresh = false; }
+            }
+        }
+
+        /// <summary>Ennemis qu'aucune de mes flèches ne vise : petite étiquette pour les dégâts des autres.</summary>
         public static void Draw()
         {
             if (!Coop.Active || !Game.InBattle || _remote.Count == 0) return;
             var cam = Camera.main;
             if (cam == null) return;
+
+            var targeted = new HashSet<IntPtr>();
+            foreach (var a in Arrows())
+                try { if (a.gameObject.activeInHierarchy && a.CurrentTargetEnemy != null) targeted.Add(a.CurrentTargetEnemy.Pointer); } catch { }
+
             var battle = Game.Battle;
             foreach (var e in Game.Enemies)
             {
-                int idx = Game.Safe(() => battle.GetBattleIndexOfEntity(e));
-                var lines = new List<(int id, int dmg)>();
+                if (targeted.Contains(e.Pointer)) continue;
+                int idx = SafeIdx(e);
+                var parts = new List<string>();
+                int total = 0;
                 foreach (var kv in _remote.OrderBy(k => k.Key))
-                    if (kv.Key != Coop.LocalId && kv.Value.TryGetValue(idx, out var dmg) && dmg > 0) lines.Add((kv.Key, dmg));
-                if (lines.Count == 0) continue;
-                _local.TryGetValue(idx, out var mine);
-                int total = mine + lines.Sum(l => l.dmg);
+                    if (kv.Key != Coop.LocalId && kv.Value.TryGetValue(idx, out var dmg) && dmg > 0)
+                    {
+                        parts.Add($"<color={Coop.ColorOf(kv.Key)}>●</color>");
+                        total += dmg;
+                    }
+                if (total == 0) continue;
 
                 float h = 2f;
                 var sr = e.GetComponentInChildren<SpriteRenderer>();
                 if (sr != null) h = Math.Min(4f, sr.bounds.size.y);
                 var s = cam.WorldToScreenPoint(e.transform.position + new Vector3(0, h * 1.15f, 0));
                 if (s.z < 0) continue;
-
-                int rows = lines.Count + 1;
-                var r = new Rect(s.x - 70, Screen.height - s.y - rows * 20 - 8, 140, rows * 20 + 6);
+                var r = new Rect(s.x - 40, Screen.height - s.y - 26, 80, 24);
                 GUI.Box(r, ""); GUI.Box(r, "");
-                float y = r.y + 3;
-                foreach (var l in lines)
-                {
-                    GUI.Label(new Rect(r.x + 8, y, 130, 20), $"<b><color={Coop.ColorOf(l.id)}>{Coop.NameOf(l.id)}</color></b>  ⚔ {l.dmg}");
-                    y += 20;
-                }
-                bool lethal = total >= e.CurrentHealth + e.CurrentBlock;
-                GUI.Label(new Rect(r.x + 8, y, 130, 20), $"<b>Total ⚔ {total}</b>{(lethal ? "  <color=#ff6060>☠</color>" : "")}");
+                GUI.Label(new Rect(r.x + 8, r.y + 2, 70, 20), $"{string.Join("", parts)} <b>⚔ {total}</b>");
             }
         }
     }
