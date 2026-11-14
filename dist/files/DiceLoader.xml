@@ -226,6 +226,13 @@
         <member name="T:DiceLoader.Scheduler">
             <summary>File d'actions différées, exécutée dans Update sur le thread Unity.</summary>
         </member>
+        <member name="T:DiceLoader.WindowEnforcer">
+            <summary>
+            Argument de lancement « -ditd-window X Y L H » (passé par le launcher pour les tests à plusieurs fenêtres).
+            Au chargement du menu, le jeu réapplique sa résolution enregistrée (souvent le plein écran) : on réimpose
+            donc le mode fenêtré, la taille et la position pendant les premières minutes, puis on laisse la main au joueur.
+            </summary>
+        </member>
         <member name="T:DiceLoader.Plugin">
             <summary>
             Point d'entrée : plugin BepInEx 6 (IL2CPP). BepInEx s'occupe de l'injection (Doorstop + CoreCLR)

@@ -21,6 +21,7 @@ namespace DiceLoader
         private void Update()
         {
             Scheduler.Tick();
+            WindowEnforcer.Tick();
 
             // Changement d'état global, détecté par polling : plus robuste que de patcher la machine à états générique
             var st = Game.State;

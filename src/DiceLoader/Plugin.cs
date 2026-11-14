@@ -15,7 +15,7 @@ namespace DiceLoader
     public class Plugin : BasePlugin
     {
         public const string Guid = "dicemodding.diceloader";
-        public const string Version = "1.0.0";
+        public const string Version = "1.0.1";
 
         internal static ConfigEntry<KeyCode> MenuKey;
         internal static ConfigEntry<bool> ShowWatermark;
@@ -26,6 +26,7 @@ namespace DiceLoader
             ShowWatermark = Config.Bind("General", "ShowWatermark", true, "Afficher « DiceLoader » en bas de l'écran");
 
             Loader.Init(Log, Config);
+            WindowEnforcer.Init();
             Hooks.Apply(new Harmony(Guid));
             AddComponent<LoaderBehaviour>();   // enregistre le type dans IL2CPP et l'attache à un GameObject persistant
             Loader.LoadAll();

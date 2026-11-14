@@ -72,10 +72,40 @@ namespace DiceMultiplayer
 
         public override void OnBattleEnd(BattleSystem battle, BattleSystem.EndState result) => Coop.ClearReady();
 
+        private static bool _attackWarm;
+
+        /// <summary>
+        /// Le constructeur statique d'Attack crée Attack.ForceKill, qui lit RunInfo.CurrentRun : s'il s'exécute à un moment
+        /// où la run est absente, la classe reste cassée pour tout le processus (TypeInitializationException à chaque coup).
+        /// On le déclenche donc ici, sur la carte, quand la run existe forcément.
+        /// ignoreEndlessIncrease = true : notre instance à nous ne lit pas la run.
+        /// </summary>
+        private void PrewarmAttack()
+        {
+            if (_attackWarm) return;
+            bool hasRun = RunInfo.CurrentRun != null;
+            try
+            {
+                var a = new Attack(0, 1, false, null, false, true);
+                _attackWarm = true;
+                Logger.LogInfo($"[diag] Attack initialisée (run {(hasRun ? "présente" : "ABSENTE")}, ForceKill {(Attack.ForceKill != null ? "ok" : "null")}).");
+            }
+            catch (Exception e)
+            {
+                Coop.AddLog($"[diag] Attack déjà cassée avant la carte (run {(hasRun ? "présente" : "ABSENTE")}) : {e.GetType().Name} {e.Message}");
+            }
+        }
+
         public override void OnGameStateChanged(GameManager.GameState previous, GameManager.GameState current)
         {
             // Première arrivée sur la carte : le deck de l'hôte est chargé, on ajoute ceux des autres personnages
-            if (current == GameManager.GameState.Map) Game.Schedule(Team.MergeDecksIfNeeded, 0.5f);
+            if (current == GameManager.GameState.Map)
+            {
+                PrewarmAttack();
+                Game.Schedule(Team.MergeDecksIfNeeded, 0.5f);
+            }
+            if (Coop.Active && current == GameManager.GameState.BattleFloor)
+                Coop.AddLog($"[diag] Combat : RunInfo.CurrentRun {(RunInfo.CurrentRun != null ? "présente" : "ABSENTE")}");
             if (current == GameManager.GameState.TitleScreen) Team.Picks.Clear();
         }
 
