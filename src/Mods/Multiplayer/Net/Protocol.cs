@@ -23,6 +23,8 @@ namespace DiceMultiplayer.Net
         public const string EnemyDamage = "edmg";  // tous : dégâts à l'ennemi d'index uid (btn = dégâts, flag = ignore le bloc, x>0 = coup fatal)
         public const string EnemySync = "esync";   // hôte → tous : PV de référence des ennemis (text = "idx:pv:bloc;…")
         public const string OnMap = "onmap";       // tous : flag = de retour sur la carte et prêt à continuer
+        public const string Vote = "vote";         // tous : vote pour une case de la carte (path, comp, btn, x, y)
+        public const string MapGo = "mapgo";       // hôte → tous : case retenue (rejouée chez tous, hôte compris)
         public const string OpenSel = "opensel";   // hôte → clients : ouvrir la sélection de personnage
         public const string CloseSel = "closesel"; // hôte → clients : retour à l'écran titre
         public const string Click = "click";       // action : path, comp, method, btn, x, y
@@ -83,6 +85,8 @@ namespace DiceMultiplayer.Net
         public RunData run;
         public List<PlayerInfo> players;
         public List<PlayerPick> picks;
+        /// <summary>Instantané visuel d'un dé (sprites, couleurs, textes, types) : voir Board.Snapshot.</summary>
+        public string vis;
 
         private static readonly JsonSerializerOptions Opt = new JsonSerializerOptions
         {

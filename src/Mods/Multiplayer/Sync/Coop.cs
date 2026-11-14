@@ -89,6 +89,7 @@ namespace DiceMultiplayer.Sync
             Cursors.Clear();
             _ready.Clear();
             _onMap.Clear();
+            Votes.Clear();
             DesyncWarning = null;
             PendingSeed = null;
             _floorCounter = 0;
@@ -103,6 +104,7 @@ namespace DiceMultiplayer.Sync
             _floorCounter = 0;
             _ready.Clear();
             _onMap.Clear();
+            Votes.Clear();
             DesyncWarning = null;
             Heroes.Reset();
             Board.Reset();
@@ -142,7 +144,9 @@ namespace DiceMultiplayer.Sync
                     case T.BoardClear: Board.OnRemoteClear(m); break;
                     case T.EnemyDamage: Combat.OnRemoteDamage(m); break;
                     case T.EnemySync: Combat.OnEnemySync(m); break;
-                    case T.OnMap: if (m.flag) _onMap.Add(m.id); else _onMap.Remove(m.id); break;
+                    case T.OnMap: if (m.flag) _onMap.Add(m.id); else _onMap.Remove(m.id); TryResolveVote(); break;
+                    case T.Vote: OnVote(m); break;
+                    case T.MapGo: ExecuteMapGo(m); break;
                 }
             }
             catch (Exception e)
@@ -200,7 +204,9 @@ namespace DiceMultiplayer.Sync
         public static void SetOnMap(bool onMap)
         {
             if (onMap) _onMap.Add(LocalId); else _onMap.Remove(LocalId);
+            if (!onMap) Votes.Clear();
             Send(new Msg { t = T.OnMap, flag = onMap });
+            TryResolveVote();
         }
 
         public static IEnumerable<int> NotOnMap => Net?.Players.Where(p => !_onMap.Contains(p.Id)).Select(p => p.Id) ?? Enumerable.Empty<int>();
@@ -220,26 +226,89 @@ namespace DiceMultiplayer.Sync
 
             var comp = instance.TryCast<Component>();
             if (comp == null) return true;
+            // Seule la navigation (cases et flèches de chemin) est partagée : récompenses, sac, etc. restent locaux
+            var typeName = Game.Safe(() => comp.GetIl2CppType().Name) ?? "";
+            if (!MapNavigationTypes.Contains(typeName)) return true;
             var go = comp.gameObject;
             string path = GoPath.Of(go);
-            if (GoPath.PathContains(path, LocalOnlyKeywords())) return true;     // sac, options, codex… : local
 
-            if (!IsLeader) { ClickDepth = 0; Toast($"C'est {NameOf(LeaderId)} qui choisit le chemin"); return false; }
-            var waiting = NotOnMap.ToList();
-            if (waiting.Count > 0) { ClickDepth = 0; Toast("En attente de " + string.Join(", ", waiting.Select(NameOf))); return false; }
-
+            // Vote : le clic ne déplace personne, il enregistre le choix du joueur
             var pos = data != null ? data.position : Vector2.zero;
-            Send(new Msg
+            var vote = new Msg
             {
-                t = T.Click,
+                t = T.Vote,
                 path = path,
                 comp = Game.Safe(() => comp.GetIl2CppType().FullName) ?? original.DeclaringType?.FullName,
                 method = "OnPointerClick",
                 btn = data != null ? (int)data.button : 0,
                 x = pos.x / Math.Max(1, Screen.width),
                 y = pos.y / Math.Max(1, Screen.height),
-            });
-            return true;
+            };
+            ClickDepth = 0;
+            Send(vote);
+            vote.id = LocalId;
+            OnVote(vote);
+            return false;
+        }
+
+        private static readonly HashSet<string> MapNavigationTypes = new HashSet<string> { "VisualMapTile", "MapTileArrow" };
+
+        // ───────────── Vote du chemin ─────────────
+
+        /// <summary>Vote de chaque joueur (id → clic sur une case).</summary>
+        public static readonly Dictionary<int, Msg> Votes = new Dictionary<int, Msg>();
+
+        private static void OnVote(Msg m)
+        {
+            Votes[m.id] = m;
+            AddLog($"{NameOf(m.id)} vote pour une case ({Votes.Count}/{Net.Players.Count}).");
+            if (IsHost) TryResolveVote();
+        }
+
+        /// <summary>Appelé aussi quand un joueur revient sur la carte : le vote se résout dès que tout le monde est là et a voté.</summary>
+        public static void TryResolveVote()
+        {
+            if (!Active || !IsHost || Votes.Count == 0) return;
+            if (NotOnMap.Any() || Net.Players.Any(p => !Votes.ContainsKey(p.Id))) return;
+
+            // Majorité ; en cas d'égalité, le choix de l'hôte s'il en fait partie, sinon le premier dans l'ordre des joueurs
+            var groups = Votes.Values.GroupBy(v => v.path).ToList();
+            int best = groups.Max(g => g.Count());
+            var top = groups.Where(g => g.Count() == best).ToList();
+            var winner = top.FirstOrDefault(g => g.Any(v => v.id == LocalId))
+                         ?? top.OrderBy(g => g.Min(v => v.id)).First();
+            var choice = winner.First();
+            AddLog($"Chemin choisi ({best} voix sur {Votes.Count}).");
+            var go = new Msg { t = T.MapGo, path = choice.path, comp = choice.comp, method = choice.method, btn = choice.btn, x = choice.x, y = choice.y };
+            Send(go);
+            ExecuteMapGo(go);
+        }
+
+        private static void ExecuteMapGo(Msg m)
+        {
+            Votes.Clear();
+            ReplayClick(m);
+        }
+
+        /// <summary>Affiche les votes au-dessus des cases (OnGUI, phase Repaint).</summary>
+        public static void DrawVotes()
+        {
+            if (!Active || Votes.Count == 0 || Game.State != GameManager.GameState.Map) return;
+            foreach (var grp in Votes.Values.GroupBy(v => v.path))
+            {
+                var go = GoPath.Find(grp.Key);
+                if (go == null) continue;
+                var sp = Board.ScreenPos(go.transform);
+                if (sp == null) continue;
+                var names = string.Join(" ", grp.Select(v => $"<color={ColorOf(v.id)}>●{NameOf(v.id)}</color>"));
+                GUI.Box(new Rect(sp.Value.x - 60, Screen.height - sp.Value.y - 52, 120, 24), "");
+                GUI.Label(new Rect(sp.Value.x - 56, Screen.height - sp.Value.y - 50, 116, 22), $"<b>{names}</b>");
+            }
+            var missing = Net.Players.Where(p => !Votes.ContainsKey(p.Id)).Select(p => p.Name).ToList();
+            var away = NotOnMap.Select(NameOf).ToList();
+            string status = away.Count > 0 ? "En attente de " + string.Join(", ", away) + " (pas encore sur la carte)"
+                          : missing.Count > 0 ? "Votes manquants : " + string.Join(", ", missing) : "";
+            if (status != "") GUI.Box(new Rect(Screen.width / 2f - 220, Screen.height - 46, 440, 28), status);
         }
 
         public static void EndLocalClick() { if (ClickDepth > 0) ClickDepth--; }

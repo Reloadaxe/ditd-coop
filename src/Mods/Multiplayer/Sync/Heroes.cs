@@ -29,6 +29,10 @@ namespace DiceMultiplayer.Sync
             public int Hp, MaxHp, Block;
             public bool KO;
             public float LastUpdate;
+            public TMPro.TMP_Text HpText, BlockText;
+            public GameObject BlockParent;
+            public bool HpWithMax;
+            public string ShownHp, ShownBlock;
         }
 
         private static readonly Dictionary<int, Remote> _remotes = new Dictionary<int, Remote>();
@@ -92,6 +96,22 @@ namespace DiceMultiplayer.Sync
                 r.Go.transform.position = local.transform.position + r.Offset;
                 if (r.Go.activeSelf == r.KO) r.Go.SetActive(!r.KO);
                 if (r.Anim != null && state != 0 && state != r.LastState) { r.LastState = state; try { r.Anim.Play(state, 0, norm); } catch { } }
+                // Interface de vie du jeu, remplie avec l'état reçu du réseau
+                try
+                {
+                    if (r.HpText != null)
+                    {
+                        var s = r.HpWithMax ? $"{r.Hp}/{r.MaxHp}" : r.Hp.ToString();
+                        if (s != r.ShownHp) { r.HpText.text = s; r.ShownHp = s; }
+                    }
+                    if (r.BlockParent != null && r.BlockParent.activeSelf != (r.Block > 0)) r.BlockParent.SetActive(r.Block > 0);
+                    if (r.BlockText != null)
+                    {
+                        var b = r.Block.ToString();
+                        if (b != r.ShownBlock) { r.BlockText.text = b; r.ShownBlock = b; }
+                    }
+                }
+                catch { }
             }
 
             if (Time.unscaledTime < _nextCheck) return;
@@ -116,9 +136,37 @@ namespace DiceMultiplayer.Sync
                 holder.SetActive(false);   // parent inactif : aucun Awake/OnEnable ne s'exécute sur le clone
                 var go = UnityEngine.Object.Instantiate(pd.prefab, holder.transform);
                 go.name = $"DIM_Remote_{pick.Id}";
-                foreach (var mb in go.GetComponentsInChildren<MonoBehaviour>(true).ToArray().Reverse()) try { UnityEngine.Object.DestroyImmediate(mb); } catch { }
-                foreach (var c in go.GetComponentsInChildren<Canvas>(true).ToArray()) try { if (c != null && c.gameObject != go) UnityEngine.Object.DestroyImmediate(c.gameObject); } catch { }
+                // Interface de vie du prefab (EntityCanvas) : on la garde pour afficher les PV avec la même UI que le héros local.
+                // On note ses textes avant de retirer les scripts, et on masque les marqueurs (intentions, modificateurs).
+                var ec = go.GetComponentInChildren<EntityCanvas>(true);
+                if (ec != null)
+                {
+                    r.HpText = Tmp(Game.Safe(() => ec.healthText));
+                    r.BlockText = Tmp(Game.Safe(() => ec.blockText));
+                    r.BlockParent = Game.Safe(() => ec.parentBlock)?.gameObject;
+                    foreach (var mk in new[] { Game.Safe(() => ec.attackMarker), Game.Safe(() => ec.blockMarker), Game.Safe(() => ec.healMarker),
+                                               Game.Safe(() => ec.boostMarker), Game.Safe(() => ec.currentBoostMarker) })
+                        if (mk != null) try { mk.gameObject.SetActive(false); } catch { }
+                    var mods = Game.Safe(() => ec.modifiersParentRT);
+                    if (mods != null) for (int i = 0; i < mods.childCount; i++) mods.GetChild(i).gameObject.SetActive(false);
+                    var parry = Game.Safe(() => ec.parentParryRT);
+                    if (parry != null) parry.gameObject.SetActive(false);
+                }
+                // Retirer la logique : on garde l'UI Unity et TextMeshPro, tout le reste (scripts du jeu) part
+                foreach (var mb in go.GetComponentsInChildren<MonoBehaviour>(true).ToArray().Reverse())
+                {
+                    var ns = Game.Safe(() => mb.GetIl2CppType().Namespace) ?? "";
+                    if (ns.StartsWith("UnityEngine") || ns.StartsWith("TMPro")) continue;
+                    try { UnityEngine.Object.DestroyImmediate(mb); } catch { }
+                }
                 foreach (var col in go.GetComponentsInChildren<Collider2D>(true).ToArray()) try { UnityEngine.Object.DestroyImmediate(col); } catch { }
+                foreach (var gr in go.GetComponentsInChildren<UnityEngine.UI.Graphic>(true)) gr.raycastTarget = false;
+                foreach (var cv in go.GetComponentsInChildren<Canvas>(true))
+                    if (cv.renderMode != RenderMode.ScreenSpaceOverlay && cv.worldCamera == null) cv.worldCamera = Camera.main;
+                // Format du texte de vie local (« 20 » ou « 20/20 ») pour l'imiter
+                var localEc = Game.Safe(() => local.GetComponentInChildren<EntityCanvas>(true));
+                var localHp = Tmp(Game.Safe(() => localEc.healthText));
+                r.HpWithMax = localHp != null && (localHp.text ?? "").Contains("/");
 
                 r.Anim = go.GetComponentInChildren<Animator>(true);
                 try
@@ -152,6 +200,13 @@ namespace DiceMultiplayer.Sync
             catch (Exception e) { Coop.AddLog($"Affichage du héros de {Coop.NameOf(pick.Id)} impossible : {e.Message}"); }
         }
 
+        /// <summary>Texte TextMeshPro piloté par un CustomText du jeu (sur le même objet ou un enfant).</summary>
+        private static TMPro.TMP_Text Tmp(CustomText ct)
+        {
+            if (ct == null) return null;
+            return Game.Safe(() => ct.GetComponent<TMPro.TMP_Text>()) ?? Game.Safe(() => ct.GetComponentInChildren<TMPro.TMP_Text>(true));
+        }
+
         public static void DespawnAll()
         {
             foreach (var r in _remotes.Values) { if (r.Go != null) try { UnityEngine.Object.Destroy(r.Go); } catch { } r.Go = null; }
@@ -169,7 +224,9 @@ namespace DiceMultiplayer.Sync
             {
                 if (r.Go == null && !r.KO) continue;
                 var t = r.Go != null ? r.Go.transform : _local.transform;
-                string stats = r.KO ? "<color=#ff6060>K.O.</color>" : $"♥ {r.Hp}/{r.MaxHp}" + (r.Block > 0 ? $"  ⛨ {r.Block}" : "");
+                // PV et bloc : affichés par l'interface du jeu (EntityCanvas) quand elle existe, sinon en texte
+                string stats = r.KO ? "<color=#ff6060>K.O.</color>"
+                             : r.HpText != null ? "" : $"♥ {r.Hp}/{r.MaxHp}" + (r.Block > 0 ? $"  ⛨ {r.Block}" : "");
                 Label(cam, t, $"<b><color={Coop.ColorOf(r.PlayerId)}>{Coop.NameOf(r.PlayerId)}</color></b>  {stats}", r.Go == null ? -30 : 0);
             }
         }

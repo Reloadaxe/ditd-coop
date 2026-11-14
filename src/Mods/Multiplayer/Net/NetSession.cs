@@ -19,7 +19,7 @@ namespace DiceMultiplayer.Net
     /// </summary>
     public sealed class NetSession : System.IDisposable
     {
-        public const string ProtocolVersion = "dim-4";
+        public const string ProtocolVersion = "dim-5";
         public const int MaxPlayers = 3;
         private static readonly string[] Colors = { "#4FC3F7", "#FFB74D", "#AED581", "#F06292" };
 

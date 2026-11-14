@@ -12,7 +12,7 @@ namespace DiceMultiplayer
     /// Mod multijoueur coop (2 ou 3 joueurs) en TCP direct.
     /// Tout le monde joue la même run, synchronisée en lockstep sur les entrées. Voir Sync/Coop.cs.
     /// </summary>
-    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.4.1",
+    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.5.0",
         Author = "DiceModding", Description = "Coop à 2 ou 3 : chacun sa run et son héros, ennemis et plateau partagés (TCP).")]
     public class MultiplayerMod : DiceMod
     {
@@ -65,6 +65,7 @@ namespace DiceMultiplayer
             if (net == null) return;
             net.Pump();
             try { Heroes.Update(); } catch (Exception e) { Logger.LogDebug("Heroes : " + e.Message); }
+            try { Board.Update(); } catch (Exception e) { Logger.LogDebug("Board : " + e.Message); }
 
 
             if (Coop.Active && Time.unscaledTime >= _nextCursor)
@@ -191,7 +192,7 @@ namespace DiceMultiplayer
             float w = 240, x = Screen.width - w - 10, y = 10;
             var players = Coop.Net.Players.OrderBy(p => p.Id).ToList();
             GUI.Box(new Rect(x, y, w, 26 + players.Count * 20 + (Game.InBattle ? 20 : 0)), "");
-            GUI.Label(new Rect(x + 8, y + 4, w, 20), $"<b>Coop (F2)</b> - meneur : <color={Coop.ColorOf(Coop.LeaderId)}>{Coop.NameOf(Coop.LeaderId)}</color>");
+            GUI.Label(new Rect(x + 8, y + 4, w, 20), $"<b>Coop (F2)</b> - chemin choisi au vote");
             y += 24;
             foreach (var p in players)
             {
@@ -228,6 +229,7 @@ namespace DiceMultiplayer
 
             // Dés posés par les autres joueurs sur le plateau
             try { Board.DrawGhosts(); } catch { }
+            try { Coop.DrawVotes(); } catch { }
 
             // Toast et alerte de désynchronisation
             if (Coop.ToastText != null && Time.unscaledTime < Coop.ToastUntil)
@@ -286,7 +288,6 @@ namespace DiceMultiplayer
                 UI.Label("Joueurs : " + string.Join(", ", net.Players.Select(p => $"{p.Name}{(p.Id == net.LocalId ? " (toi)" : "")}")));
                 UI.Label("Chacun choisit son personnage (Nouvelle run) puis clique sur Commencer. La run démarre quand tout le monde est prêt.");
 
-                _rotateLeader.Value = UI.Toggle(_rotateLeader.Value, "Meneur tournant à chaque étage (à régler pareil chez tous)");
                 if (UI.Button("Quitter la partie")) { Coop.Detach(); Coop.AddLog("Session fermée."); }
 
                 UI.Space();
