@@ -347,15 +347,40 @@ namespace DiceMultiplayer.Sync
         /// </summary>
         private static List<Vector2Int> ClickableOptions(Map map, out string detail)
         {
+            // Le marquage « cliquable » du jeu devient périmé quand on bloque puis relance le départ (au 2e choix, les cases
+            // du choix précédent rebondissaient encore). On s'appuie donc sur la position réelle du joueur (cases suivantes
+            // de sa case = niveau suivant), puis on remet nous-mêmes les visuels en accord (SetClickables).
             var clickable = new List<Vector2Int>();
             foreach (var t in UnityEngine.Object.FindObjectsOfType<VisualMapTile>())
             {
                 try { if (t != null && t.isClickable && t.gameObject.activeInHierarchy) clickable.Add(t.ActiveTile.CoordVector); }
                 catch { }
             }
-            var fallback = NextOptions(map, out var nextDetail);
-            detail = $"cliquables=[{string.Join(" ", clickable.Select(c => $"{c.x},{c.y}"))}] {nextDetail}";
-            return clickable.Count > 0 ? clickable.Distinct().ToList() : fallback;
+            var options = NextOptions(map, out var nextDetail);
+            detail = $"jeu (cliquables)=[{string.Join(" ", clickable.Select(c => $"{c.x},{c.y}"))}] {nextDetail}";
+            return options.Count > 0 ? options : clickable.Distinct().ToList();
+        }
+
+        /// <summary>
+        /// Aligne l'animation « case cliquable » (respiration) sur les choix du vote : les cases possibles rebondissent,
+        /// avec les raccourcis Option1..3 ; toutes les autres s'arrêtent. Liste vide = plus aucune case cliquable.
+        /// </summary>
+        private static void SetClickables(List<Vector2Int> options)
+        {
+            foreach (var t in UnityEngine.Object.FindObjectsOfType<VisualMapTile>())
+            {
+                try
+                {
+                    if (t == null) continue;
+                    var c = t.ActiveTile.CoordVector;
+                    int idx = options.IndexOf(c);
+                    bool should = idx >= 0;
+                    if (t.isClickable == should && !should) continue;
+                    var shortcut = idx == 0 ? TileShortcutOption.Option1 : idx == 1 ? TileShortcutOption.Option2 : idx == 2 ? TileShortcutOption.Option3 : TileShortcutOption.NONE;
+                    t.ToggleClickableVisuals(should, should ? shortcut : TileShortcutOption.NONE);
+                }
+                catch { }
+            }
         }
 
         /// <summary>
@@ -371,6 +396,7 @@ namespace DiceMultiplayer.Sync
             var options = ClickableOptions(map, out var detail);
             _currentOptions = options;
             AddLog($"[vote] Choix du chemin : {options.Count} case(s) possible(s) ({detail})");
+            SetClickables(options);
             if (options.Count == 0) return;
             if (options.Count == 1) { CastVote(options[0], auto: true); return; }
             if (!_myVotePending) { _awaitingChoice = true; Toast("Plusieurs chemins : clique sur la case de ton choix pour voter"); }
@@ -493,6 +519,7 @@ namespace DiceMultiplayer.Sync
             var map = Game.Map;
             if (tile == null || map == null) { AddLog($"[vote] Case {m.sx},{m.sy} introuvable sur ta carte."); return; }
             AddLog($"[vote] Départ vers la case {m.sx},{m.sy}.");
+            Game.Schedule(() => SetClickables(new List<Vector2Int>()), 0.6f);
             _allowMoveUntil = Time.unscaledTime + 3f;
             _lastClicked = null;
             // La case gagnante devient le choix du jeu partout où il peut le lire (survol, curseur, destination),
