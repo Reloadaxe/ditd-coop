@@ -22,6 +22,7 @@ namespace DiceMultiplayer.Net
         public const string BoardClear = "bclear"; // tous : plateau du joueur vidé (fin de tour)
         public const string EnemyDamage = "edmg";  // tous : dégâts à l'ennemi d'index uid (btn = dégâts, flag = ignore le bloc, x>0 = coup fatal)
         public const string EnemySync = "esync";   // hôte → tous : PV de référence des ennemis (text = "idx:pv:bloc;…")
+        public const string Preview = "preview";   // tous : dégâts prévus par mon plateau sur chaque ennemi (text = "idx:dégâts;…")
         public const string OnMap = "onmap";       // tous : flag = de retour sur la carte et prêt à continuer
         public const string Vote = "vote";         // tous : vote pour une case de la carte (path, comp, btn, x, y)
         public const string MapGo = "mapgo";       // hôte → tous : case retenue (rejouée chez tous, hôte compris)
