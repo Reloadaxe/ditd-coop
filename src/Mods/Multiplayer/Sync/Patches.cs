@@ -78,6 +78,8 @@ namespace DiceMultiplayer.Sync
             P(h, typeof(ReturnDiceToHand), nameof(ReturnDiceToHand.ExecuteReturnDiceToHand), nameof(ReturnDicePrefix));
             // Dés des autres posés en vrai dans mes cases : leurs actions ne comptent pas chez moi, et ils ne vont pas dans ma défausse
             P(h, typeof(BoardSlot), nameof(BoardSlot.GetBattleActions), nameof(GhostActionsPostfix), postfix: true);
+            // Case occupée par le dé d'un autre joueur : refusée en amont (sinon le dé lâché restait à moitié posé)
+            P(h, typeof(BoardSlot), "CanPlaceDice", nameof(CanPlaceDicePostfix), postfix: true);
             P(h, typeof(BattleBoard), nameof(BattleBoard.DiscardAllDice), nameof(DiscardAllPrefix));
             P(h, typeof(HandUI), nameof(HandUI.FloorEnd), nameof(HandFloorEndPrefix));
             // Les dés des autres sont verrouillés : ni clic, ni sélection, ni déplacement
@@ -332,6 +334,17 @@ namespace DiceMultiplayer.Sync
             }
             catch { }
             return true;
+        }
+
+        private static void CanPlaceDicePostfix(BoardSlot __instance, ref bool __result)
+        {
+            try
+            {
+                if (!__result || !Coop.Active || Board.PlacingGhost || __instance == null) return;
+                var c = __instance.CurrentCoord;
+                if (Board.IsTakenByOther(c.x, c.y) || Board.IsGhostSlot(__instance)) __result = false;
+            }
+            catch { }
         }
 
         private static bool GhostDiceInputPrefix(GameObjectDice __instance)

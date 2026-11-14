@@ -1,6 +1,6 @@
 {
-    "version":  "0.10.2",
-    "changelog":  "Sorts d\u0027ennemis sur le plateau (×2 du scorpion) synchronisés ; valeurs des dés des autres avec leurs reliques",
+    "version":  "0.10.3",
+    "changelog":  "Les cases occupées par un autre joueur refusent proprement le dé (plus de dé coincé)",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "c563398745740b668e3af5d57159c647baa9b6e9d5596d55db86eb85618b00e5",
+                      "sha256":  "3f6c08fd197c7977144ffa4625e6fe681f5f9b358b79380c77269b2c4db465cb",
                       "size":  50176,
-                      "version":  "0.10.2"
+                      "version":  "0.10.3"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.10.2"
+                      "version":  "0.10.3"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "0827c87b84c58ed2dbbd6e98a15e5c8d08cc38079e1e5df3e4cceb25e6a13a47",
+                      "sha256":  "dad848cd4ecad75182cfd753babb2b7443905a8b5ab68ca446f218b497b9f6ca",
                       "size":  10752,
-                      "version":  "0.10.2",
+                      "version":  "0.10.3",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "559ca41133369b19a29d00538c0e43c13ac19f7134a5ee77fd8ac002d5cabfca",
+                      "sha256":  "3d8d0246577052581f3f949c22ff74341acee1900ed1c6221b2e9bab78b8f93c",
                       "size":  8704,
-                      "version":  "0.10.2",
+                      "version":  "0.10.3",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "ca2c394d6e5fd30eb455f4d34d4c836a9fcac33df715c86b54f365747ee3d9c2",
+                      "sha256":  "161e358e92c8f5247f833c5cdc7023a8227d45ae857a98870758ffe73cb9400f",
                       "size":  175616,
-                      "version":  "0.10.2"
+                      "version":  "0.10.3"
                   }
               ],
     "remove":  [
