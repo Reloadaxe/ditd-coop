@@ -229,20 +229,34 @@ namespace DiceMultiplayer.Sync
         /// <summary>Vote de chaque joueur (id → coordonnées de la case, dans sx/sy).</summary>
         public static readonly Dictionary<int, Msg> Votes = new Dictionary<int, Msg>();
 
-        private static bool _executingMapGo;
+        /// <summary>Dernière case cliquée localement (le clic reste local : infos de la case, sélection du chemin).</summary>
+        private static Vector2Int? _lastClicked;
+        /// <summary>Déplacement autorisé (vote résolu) jusqu'à cet instant.</summary>
+        private static float _allowMoveUntil;
 
-        /// <summary>
-        /// Préfixe de Map.ClickOnMapTile : tout choix de case passe par là (clic, flèche, transition entre deux séquences).
-        /// En coop, le clic ne déplace personne : il enregistre le vote du joueur. Renvoie false pour bloquer.
-        /// </summary>
+        /// <summary>Préfixe de Map.ClickOnMapTile : on laisse le jeu faire (infos, sélection), on retient juste la case.</summary>
         public static bool OnMapTileClick(VisualMapTile tile)
         {
-            if (!Active || _executingMapGo || Replaying || tile == null) return true;
-            var coord = Game.Safe(() => tile.ActiveTile.CoordVector);
-            var vote = new Msg { t = T.Vote, sx = coord.x, sy = coord.y };
+            if (!Active || tile == null) return true;
+            if (!Replaying) _lastClicked = Game.Safe(() => tile.ActiveTile.CoordVector);
+            return true;
+        }
+
+        /// <summary>
+        /// Préfixe de Map.ChangeState : le départ (MovePlayer) est le vrai moment du choix. Sans vote résolu, on le bloque
+        /// et on vote pour la case retenue. Renvoie false pour bloquer.
+        /// </summary>
+        public static bool OnMapChangeState(Map.MapState next)
+        {
+            if (!Active || next != Map.MapState.MovePlayer) return true;
+            if (Time.unscaledTime < _allowMoveUntil) return true;
+            if (_lastClicked == null) { AddLog("[vote] Départ sans case connue : laissé passer."); return true; }
+            var c = _lastClicked.Value;
+            var vote = new Msg { t = T.Vote, sx = c.x, sy = c.y };
             Send(vote);
             vote.id = LocalId;
             OnVote(vote);
+            Toast("Vote enregistré : en attente des autres joueurs");
             return false;
         }
 
@@ -278,10 +292,17 @@ namespace DiceMultiplayer.Sync
             Votes.Clear();
             var tile = FindTile(m.sx, m.sy);
             var map = Game.Map;
-            if (tile == null || map == null) { AddLog($"Case {m.sx},{m.sy} introuvable sur ta carte."); return; }
-            _executingMapGo = true;
-            try { WithReplay(() => map.ClickOnMapTile(tile)); }
-            finally { _executingMapGo = false; }
+            if (tile == null || map == null) { AddLog($"[vote] Case {m.sx},{m.sy} introuvable sur ta carte."); return; }
+            AddLog($"[vote] Départ vers la case {m.sx},{m.sy}.");
+            _allowMoveUntil = Time.unscaledTime + 3f;
+            _lastClicked = null;
+            // Sélection de la case gagnante (comme un clic), puis départ si le jeu ne l'a pas déjà lancé
+            WithReplay(() => map.ClickOnMapTile(tile));
+            Game.Schedule(() =>
+            {
+                var st = Game.Safe(() => map.CurrentMapState);
+                if (st == Map.MapState.SelectTile) Game.Safe(() => { map.ChangeState(Map.MapState.MovePlayer); return 0; });
+            }, 0.3f);
         }
 
         private static VisualMapTile FindTile(int x, int y)
@@ -305,9 +326,14 @@ namespace DiceMultiplayer.Sync
                 if (tile == null) continue;
                 var sp = Board.ScreenPos(tile.transform);
                 if (sp == null) continue;
-                var names = string.Join(" ", grp.Select(v => $"<color={ColorOf(v.id)}>●{NameOf(v.id)}</color>"));
-                GUI.Box(new Rect(sp.Value.x - 60, Screen.height - sp.Value.y - 52, 120, 24), "");
-                GUI.Label(new Rect(sp.Value.x - 56, Screen.height - sp.Value.y - 50, 116, 22), $"<b>{names}</b>");
+                // Un petit point de la couleur de chaque votant, à côté de la case (jusqu'à 3)
+                float gx = sp.Value.x + 26, gy = Screen.height - sp.Value.y - 34;
+                int i = 0;
+                foreach (var v in grp.OrderBy(v => v.id))
+                {
+                    GUI.Label(new Rect(gx + i * 15, gy, 22, 24), $"<size=20><color={ColorOf(v.id)}>●</color></size>");
+                    i++;
+                }
             }
             var missing = Net.Players.Where(p => !Votes.ContainsKey(p.Id)).Select(p => p.Name).ToList();
             var away = NotOnMap.Select(NameOf).ToList();
@@ -367,10 +393,71 @@ namespace DiceMultiplayer.Sync
             bool nowReady = !_ready.Contains(LocalId);
             Send(new Msg { t = T.Ready, turn = Game.Turn, flag = nowReady });
             OnReady(LocalId, Game.Turn, nowReady);
+            Toast(nowReady ? "Prêt ! En attente des autres joueurs…" : "Tu n'es plus prêt");
             return false;
         }
 
         public static void ClearReady() => _ready.Clear();
+
+        // ───── Retour visuel sur le bouton de fin de tour ─────
+
+        private static string _btnOriginalText;
+        private static Color? _btnOriginalColor;
+        private static bool _btnShowingReady;
+
+        /// <summary>
+        /// Chaque frame en combat : tant que je suis prêt, le bouton « Fin de tour » est à ma couleur et affiche
+        /// « Prêt ✔ (x/n) » ; sinon il retrouve son texte et sa couleur d'origine.
+        /// </summary>
+        public static void UpdateReadyVisual()
+        {
+            if (!Active || !Game.InBattle) { _btnShowingReady = false; _btnOriginalText = null; _btnOriginalColor = null; return; }
+            var ui = UnityEngine.Object.FindObjectOfType<FinishTurnUI>();
+            if (ui == null) return;
+            var texts = Game.Safe(() => ui.finishTurnText)?.GetComponentsInChildren<TMPro.TMP_Text>(true);
+            var img = Game.Safe(() => ui.finishTurnImage);
+            bool ready = _ready.Contains(LocalId);
+            try
+            {
+                if (ready)
+                {
+                    if (!_btnShowingReady)
+                    {
+                        if (texts != null && texts.Length > 0) _btnOriginalText = texts[0].text;
+                        if (img != null) _btnOriginalColor = img.color;
+                        _btnShowingReady = true;
+                    }
+                    var label = $"Prêt ✔ ({_ready.Count}/{Net.Players.Count})";
+                    if (texts != null) foreach (var t in texts) if (t.text != label) t.text = label;
+                    if (img != null)
+                    {
+                        var c = Board.ParseHex(ColorOf(LocalId));
+                        img.color = Color.Lerp(Color.white, c, 0.75f);
+                    }
+                }
+                else if (_btnShowingReady)
+                {
+                    if (texts != null && _btnOriginalText != null) foreach (var t in texts) t.text = _btnOriginalText;
+                    if (img != null && _btnOriginalColor != null) img.color = _btnOriginalColor.Value;
+                    _btnShowingReady = false;
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>Bandeau « prêt / en attente » (OnGUI, phase Repaint).</summary>
+        public static void DrawReadyBanner()
+        {
+            if (!Active || !Game.InBattle || _ready.Count == 0) return;
+            var waiting = Net.Players.Where(p => !_ready.Contains(p.Id)).Select(p => $"<color={p.Color}>{p.Name}</color>").ToList();
+            string text = _ready.Contains(LocalId)
+                ? (waiting.Count > 0 ? $"✔ Tu es prêt — en attente de {string.Join(", ", waiting)}  <size=11>(re-clique pour annuler)</size>" : "✔ Tout le monde est prêt !")
+                : $"{string.Join(", ", _ready.Select(id => $"<color={ColorOf(id)}>{NameOf(id)}</color>"))} {(_ready.Count > 1 ? "sont prêts" : "est prêt")} : à toi de finir ton tour";
+            var r = new Rect(Screen.width / 2f - 260, Screen.height - 120, 520, 32);
+            GUI.Box(r, "");
+            GUI.Box(r, "");
+            GUI.Label(new Rect(r.x + 12, r.y + 6, r.width - 24, 24), $"<size=15><b>{text}</b></size>");
+        }
 
         private static void OnReady(int id, int turn, bool ready)
         {

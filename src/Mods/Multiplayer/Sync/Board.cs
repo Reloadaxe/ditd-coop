@@ -305,7 +305,7 @@ namespace DiceMultiplayer.Sync
 
         private static float P(string s) => float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : 1f;
 
-        private static Color ParseHex(string hex)
+        public static Color ParseHex(string hex)
         {
             if (!string.IsNullOrEmpty(hex) && hex[0] == '#' && hex.Length >= 7
                 && int.TryParse(hex.Substring(1, 6), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var v))
