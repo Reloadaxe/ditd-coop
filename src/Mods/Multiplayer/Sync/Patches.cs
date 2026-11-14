@@ -85,6 +85,12 @@ namespace DiceMultiplayer.Sync
             P(h, typeof(GameManager), nameof(GameManager.LoadRun), nameof(LoadRunPrefix));
             P(h, typeof(SeedSystem), nameof(SeedSystem.StartRun), nameof(SeedStartRunPostfix), postfix: true);
 
+            // Pas de tutoriel en coop (il bloquerait la partie d'un seul joueur)
+            // (get_AreTutorialsActive est exclu : sa fonction native est partagée avec 7 autres getters du jeu)
+            foreach (var g in new[] { "get_ShouldShowIntroFirstBattleTutorial", "get_ShouldShowMapTutorial", "get_ShouldShowEnemyModifierTutorial",
+                                      "get_ShouldShowChangeTargetTutorial", "get_ShouldShowCurrencyTutorial", "get_ShouldShowRelicsTutorial" })
+                P(h, typeof(RunInfo.Tutorials), g, nameof(NoTutorialPostfix), postfix: true);
+
             // 6) Lobby : sélection de personnage pilotée par l'hôte
             var L = typeof(Lobby);
             P(h, typeof(CanvasTitleScreen), nameof(CanvasTitleScreen.OnClickNewRunButtonPreCheckPopup), nameof(Lobby.NewRunPrefix), patchType: L);
@@ -176,6 +182,8 @@ namespace DiceMultiplayer.Sync
 
         // ───── Run ─────
         private static bool StartRunPrefix(RunInfo.NewRunData __0, ActiveCustomRun __1) => Team.OnLocalStartRun(__0, __1);
+
+        private static void NoTutorialPostfix(ref bool __result) { if (Coop.Active) __result = false; }
 
         private static bool LoadRunPrefix()
         {

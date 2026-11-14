@@ -53,7 +53,7 @@ namespace DiceMultiplayer.Sync
             foreach (var x in r.Relics ?? Array.Empty<int>()) relics.Add((RelicData.Title)x);
             var data = new RunInfo.NewRunData(
                 (Player.CharacterName)r.Character, (PlayerSkinData.Name)r.Skin, (Companion.Name)r.Companion,
-                relics, (Difficulty.Level)r.Difficulty, default(RunInfo.NewRunData.TutorialMode));
+                relics, (Difficulty.Level)r.Difficulty, RunInfo.NewRunData.TutorialMode.ForceTutorialInactive);
             data.challengesEnabled = r.Challenges;
             data.tutorialsActive = false;
             return data;
@@ -116,7 +116,9 @@ namespace DiceMultiplayer.Sync
         private static void StartOwnRun(int seed)
         {
             var mine = PickOf(Coop.LocalId);
-            var data = _localData ?? (mine != null ? ToNewRunData(mine) : null);
+            // Données reconstruites (et non celles du clic) : le tutoriel est forcé inactif, sinon une première run le lance
+            var data = mine != null ? ToNewRunData(mine) : _localData;
+            if (data != null) data.tutorialsActive = false;
             if (data == null) { Coop.AddLog("Aucun personnage choisi localement : impossible de lancer la run."); return; }
             Coop.PendingSeed = seed;
             Lobby.OnRunStarted();
