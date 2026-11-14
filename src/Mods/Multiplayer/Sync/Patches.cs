@@ -97,6 +97,8 @@ namespace DiceMultiplayer.Sync
             // Carte : le choix de case est un vote (toutes les entrées passent par Map.ClickOnMapTile)
             P(h, typeof(Map), nameof(Map.ClickOnMapTile), nameof(MapTileClickPrefix));
             P(h, typeof(Map), nameof(Map.ChangeState), nameof(MapChangeStatePrefix));
+            // Point de passage de TOUT départ (certains chemins du jeu ne passent pas par ChangeState)
+            P(h, typeof(Map), "EnterMovePlayerState", nameof(EnterMovePlayerPrefix));
             // Entrée clavier/manette (Rewired) qui demande de sélectionner une case nulle : NullReferenceException en boucle
             P(h, typeof(Map), nameof(Map.ForceTileSelectableSelection), nameof(NullTileGuard));
             // Embranchement pendant un déplacement : la flèche choisit la direction sans repasser par ChangeState
@@ -199,6 +201,12 @@ namespace DiceMultiplayer.Sync
         {
             try { return Coop.OnArrowClick(__instance); }
             catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("ArrowClickPrefix : " + e.Message); return true; }
+        }
+
+        private static bool EnterMovePlayerPrefix()
+        {
+            try { return Coop.OnEnterMovePlayer(); }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("EnterMovePlayerPrefix : " + e.Message); return true; }
         }
 
         private static bool MapChangeStatePrefix(Map.MapState __0)

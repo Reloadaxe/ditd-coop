@@ -284,11 +284,27 @@ namespace DiceMultiplayer.Sync
         /// Préfixe de Map.ChangeState : le départ (MovePlayer) est le vrai moment du choix. Sans vote résolu, on le bloque
         /// et on vote pour la case retenue. Renvoie false pour bloquer.
         /// </summary>
+        /// <summary>
+        /// Préfixe de Map.EnterMovePlayerState : certains départs du jeu (sélection automatique, suite d'un déplacement…)
+        /// ne passent pas par ChangeState. Même contrôle ici ; si l'on bloque à ce stade, la carte est déjà en état
+        /// « déplacement » : le départ voté relancera directement EnterMovePlayerState (voir ExecuteMapGo).
+        /// </summary>
+        public static bool OnEnterMovePlayer()
+        {
+            if (!Active || Time.unscaledTime < _allowMoveUntil) return true;
+            bool ok = OnMapChangeState(Map.MapState.MovePlayer);
+            if (!ok) { _moveBlockedInside = true; AddLog("[vote] Départ direct du jeu bloqué : en attente du vote."); }
+            return ok;
+        }
+
+        /// <summary>Un départ a été bloqué dans EnterMovePlayerState (la carte attend en état « déplacement »).</summary>
+        private static bool _moveBlockedInside;
+
         public static bool OnMapChangeState(Map.MapState next)
         {
             if (!Active) return true;
             // Arrivée en sélection de case : on propose le choix tout de suite (vote auto si un seul chemin)
-            if (next == Map.MapState.SelectTile) { Game.Schedule(StartChoice, 0.6f); return true; }
+            if (next == Map.MapState.SelectTile) { _moveBlockedInside = false; Game.Schedule(StartChoice, 0.6f); return true; }
             if (next != Map.MapState.MovePlayer) return true;
             if (Time.unscaledTime < _allowMoveUntil) return true;
             // Destination choisie : dernière case cliquée, sinon le choix enregistré par le jeu (flèches…),
@@ -544,6 +560,16 @@ namespace DiceMultiplayer.Sync
             Game.Safe(() => { map.lastHoveredTile = tile; return 0; });
             Game.Safe(() => { map.navigationCurrentCoord = coord; return 0; });
             WriteDesired(map, coord);
+            if (_moveBlockedInside)
+            {
+                // La carte attend déjà en état « déplacement » (départ direct bloqué) : on relance le déplacement lui-même
+                _moveBlockedInside = false;
+                AddLog("[vote] Reprise du déplacement bloqué vers la case choisie.");
+                WithReplay(() => map.ClickOnMapTile(tile));
+                WriteDesired(map, coord);
+                WithReplay(() => map.EnterMovePlayerState());
+                return;
+            }
             WithReplay(() => map.ClickOnMapTile(tile));
             WriteDesired(map, coord);
             Game.Schedule(() =>
