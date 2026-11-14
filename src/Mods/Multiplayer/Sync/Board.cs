@@ -354,6 +354,70 @@ namespace DiceMultiplayer.Sync
             }
         }
 
+        // ───────────── Valeur affichée sous les dés des autres ─────────────
+        //
+        // Le nombre sous un dé (BaseBoardSlot.battleValueText) est calculé avec les reliques et bonus du joueur qui
+        // affiche le plateau : sous la copie d'un dé, on voyait donc la valeur avec MES reliques, pas celles de son
+        // propriétaire. Chacun envoie la valeur finale de ses propres cases ; chez les autres, la case de la copie
+        // affiche cette valeur.
+
+        private static readonly Dictionary<int, Dictionary<(int, int), int>> _remoteVals = new Dictionary<int, Dictionary<(int, int), int>>();
+        private static string _lastVals;
+        private static float _nextVals;
+
+        public static void UpdateSlotValues()
+        {
+            if (!Coop.Active || !Game.InBattle) { _lastVals = null; return; }
+            if (Time.unscaledTime >= _nextVals)
+            {
+                _nextVals = Time.unscaledTime + 0.25f;
+                var parts = new List<string>();
+                foreach (var s in UnityEngine.Object.FindObjectsOfType<BoardSlot>())
+                {
+                    try
+                    {
+                        if (!s.gameObject.activeInHierarchy || !s.HasPlacedDice || IsGhostSlot(s)) continue;
+                        var c = s.CurrentCoord;
+                        parts.Add($"{c.x},{c.y}={s.LastFinalBattleValue}");
+                    }
+                    catch { }
+                }
+                parts.Sort(StringComparer.Ordinal);
+                var text = string.Join(";", parts);
+                if (text != _lastVals) { _lastVals = text; Coop.Send(new Msg { t = T.SlotVals, text = text }); }
+            }
+            // Affichage : valeur du propriétaire sous chaque copie
+            foreach (var g in _ghosts)
+            {
+                if (g.Real == null || g.Slot == null) continue;
+                if (!_remoteVals.TryGetValue(g.PlayerId, out var vals) || !vals.TryGetValue((g.X, g.Y), out var v)) continue;
+                try
+                {
+                    var txt = g.Slot.battleValueText;
+                    if (txt == null) continue;
+                    var str = v.ToString();
+                    var shown = txt.charactersText != null ? txt.charactersText.text : null;
+                    if (shown == null || !shown.Contains(str) || shown.Replace(str, "").Any(char.IsDigit)) txt.SetTextNoParse(str);
+                    var go = g.Slot.battleValueGO;
+                    if (go != null && go.activeSelf != (v > 0)) go.SetActive(v > 0);
+                }
+                catch { }
+            }
+        }
+
+        public static void OnRemoteSlotValues(Msg m)
+        {
+            var d = new Dictionary<(int, int), int>();
+            foreach (var part in (m.text ?? "").Split(';'))
+            {
+                var kv = part.Split('=');
+                if (kv.Length != 2) continue;
+                var xy = kv[0].Split(',');
+                if (xy.Length == 2 && int.TryParse(xy[0], out var x) && int.TryParse(xy[1], out var y) && int.TryParse(kv[1], out var v)) d[(x, y)] = v;
+            }
+            _remoteVals[m.id] = d;
+        }
+
         /// <summary>Non cliquable, contour à la couleur du joueur.</summary>
         private static void Decorate(Ghost g)
         {

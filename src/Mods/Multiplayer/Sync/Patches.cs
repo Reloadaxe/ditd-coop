@@ -94,6 +94,8 @@ namespace DiceMultiplayer.Sync
             P(h, typeof(Enemy), "_Damage", nameof(EnemyDamagePostfix), postfix: true);
             // Phase ennemie retenue tant que les autres joueurs n'ont pas fini d'exécuter leurs dés
             P(h, typeof(BattleSystem), nameof(BattleSystem.ChangeState), nameof(BattleChangeStatePrefix));
+            // Sorts d'ennemis sur le plateau (points faibles du boss scorpion) : l'hôte fait foi
+            P(h, typeof(BoardSlot), nameof(BoardSlot.CastWeakSpotSpell), nameof(CastWeakSpotPrefix));
             // Statuts posés sur les ennemis (poison, faiblesse…) : partagés
             P(h, typeof(Entity), nameof(Entity.AddModifier), nameof(AddModifierPrefix));
 
@@ -368,6 +370,12 @@ namespace DiceMultiplayer.Sync
         {
             try { Combat.OnEnemyDamaged(__instance, __0); }
             catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("EnemyDamagePostfix : " + e.Message); }
+        }
+
+        private static bool CastWeakSpotPrefix(BoardSlot __instance, SpellData __0, int __1, BoardSlot.BoardDirection __2)
+        {
+            try { return Spells.OnCast(__instance, __0, __1, __2); }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("CastWeakSpotPrefix : " + e.Message); return true; }
         }
 
         private static bool BattleChangeStatePrefix(BattleSystem __instance, BattleSystem.TurnState __0)
