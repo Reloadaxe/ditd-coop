@@ -39,7 +39,6 @@ namespace DiceMultiplayer.Sync
         public static readonly Dictionary<int, (float x, float y, string scene, float time)> Cursors = new Dictionary<int, (float, float, string, float)>();
 
         private static readonly HashSet<int> _ready = new HashSet<int>();
-        private static int _readyTurn = -1;
         private static readonly Dictionary<int, long> _hostHashes = new Dictionary<int, long>();
         private static readonly Dictionary<int, Dictionary<int, long>> _clientHashes = new Dictionary<int, Dictionary<int, long>>();
 
@@ -68,10 +67,12 @@ namespace DiceMultiplayer.Sync
 
         public static bool IsLeader => !Active || LeaderId == LocalId;
 
-        /// <summary>Propriétaire d'un dé : répartition stable par uid entre les joueurs, triés par id.</summary>
+        /// <summary>Propriétaire d'un dé : celui dont le personnage l'a apporté (Team), sinon répartition stable par uid.</summary>
         public static int OwnerOfDice(int uid)
         {
             if (!Active) return LocalId;
+            var known = Team.OwnerOf(uid);
+            if (known != null && GetPlayer(known.Value) != null) return known.Value;
             var ordered = Net.Players.OrderBy(p => p.Id).ToList();
             return ordered[((uid % ordered.Count) + ordered.Count) % ordered.Count].Id;
         }
@@ -95,7 +96,7 @@ namespace DiceMultiplayer.Sync
             Detach();
             Net = s;
             s.OnMessage += Handle;
-            s.OnPlayersChanged += () => AddLog("Joueurs : " + string.Join(", ", s.Players.Select(p => p.Name)));
+            s.OnPlayersChanged += () => { AddLog("Joueurs : " + string.Join(", ", s.Players.Select(p => p.Name))); Lobby.OnPlayersChanged(); };
             s.OnDisconnected += reason => AddLog(reason);
         }
 
@@ -108,6 +109,8 @@ namespace DiceMultiplayer.Sync
             DesyncWarning = null;
             PendingSeed = null;
             _floorCounter = 0;
+            Team.Reset();
+            Lobby.Reset();
         }
 
         public static void AddLog(string s)
@@ -130,6 +133,9 @@ namespace DiceMultiplayer.Sync
                     case T.Cursor: Cursors[m.id] = (m.x, m.y, m.scene, Time.unscaledTime); break;
                     case T.Chat: AddLog($"{NameOf(m.id)} : {m.text}"); break;
                     case T.StartRun: ApplyStartRun(m); break;
+                    case T.Pick: Team.OnRemotePick(m); break;
+                    case T.OpenSel: Lobby.OnOpenSelection(); break;
+                    case T.CloseSel: Lobby.OnCloseSelection(); break;
                     case T.Click: ReplayClick(m); break;
                     case T.PlaceDice: ReplayPlaceDice(m); break;
                     case T.ReturnDice: ReplayReturnDice(m); break;
@@ -146,6 +152,8 @@ namespace DiceMultiplayer.Sync
             }
         }
 
+        public static void Replay(Action a) => WithReplay(a);
+
         private static void WithReplay(Action a)
         {
             bool prev = Replaying;
@@ -157,41 +165,37 @@ namespace DiceMultiplayer.Sync
         // ───────────── Lancement de run ─────────────
 
         /// <summary>Hôte : appelé après SeedSystem.StartRun, quand la seed est connue.</summary>
-        public static void HostBroadcastRun(RunInfo.NewRunData data, int seed)
+        public static void HostBroadcastRun(RunData team, int seed)
         {
-            var rd = new RunData
-            {
-                Character = (int)data.playerName,
-                Skin = (int)data.playerSkin,
-                Companion = (int)data.companionName,
-                Difficulty = (int)data.chosenDifficulty,
-                Challenges = data.challengesEnabled,
-                Relics = data.initialRelics == null ? Array.Empty<int>() : data.initialRelics.Select(r => (int)r).ToArray(),
-            };
-            Send(new Msg { t = T.StartRun, run = rd, seed = seed });
+            Send(new Msg { t = T.StartRun, run = team, seed = seed, picks = Team.RunPicks });
             _floorCounter = 0;
-            AddLog($"Run lancée pour tous (seed {seed}).");
+            Team.OnHostTeamRunStarted();
+            Lobby.OnRunStarted();
+            AddLog($"Run d'équipe lancée pour tous (seed {seed}) : " +
+                   string.Join(", ", Team.RunPicks.Select(p => $"{NameOf(p.Id)} = {(Player.CharacterName)p.Run.Character}")));
+        }
+
+        /// <summary>Lance GameManager.StartRun sans que nos patchs l'interceptent.</summary>
+        public static void StartRunReplaying(RunInfo.NewRunData data)
+        {
+            var gm = Game.Manager;
+            if (gm == null) { AddLog("GameManager introuvable : impossible de lancer la run."); return; }
+            var custom = Team.LocalCustomRun;
+            if (custom == null) AddLog("Attention : aucun ActiveCustomRun local (as-tu cliqué sur Commencer ?)");
+            WithReplay(() => gm.StartRun(data, custom, true));
         }
 
         private static void ApplyStartRun(Msg m)
         {
-            var gm = Game.Manager;
-            if (gm == null || m.run == null) return;
-            var relics = new Il2CppSystem.Collections.Generic.List<RelicData.Title>();
-            foreach (var r in m.run.Relics ?? Array.Empty<int>()) relics.Add((RelicData.Title)r);
-            var data = new RunInfo.NewRunData(
-                (Player.CharacterName)m.run.Character,
-                (PlayerSkinData.Name)m.run.Skin,
-                (Companion.Name)m.run.Companion,
-                relics,
-                (Difficulty.Level)m.run.Difficulty,
-                default(RunInfo.NewRunData.TutorialMode));
-            data.challengesEnabled = m.run.Challenges;
-            data.tutorialsActive = false;
+            if (m.run == null) return;
+            Team.OnTeamRunReceived(m);
+            Lobby.OnRunStarted();
             PendingSeed = m.seed;
             _floorCounter = 0;
-            AddLog($"{NameOf(m.id)} lance la run : {data.playerName}, seed {m.seed}");
-            WithReplay(() => gm.StartRun(data, null, true));
+            AddLog($"Run d'équipe lancée par {NameOf(m.id)} (seed {m.seed}) : " +
+                   string.Join(", ", Team.RunPicks.Select(p => $"{NameOf(p.Id)} = {(Player.CharacterName)p.Run.Character}")));
+            var data = Team.ToNewRunData(m.run);
+            Game.Schedule(() => StartRunReplaying(data), 0.1f);
         }
 
         /// <summary>Client : force la seed de l'hôte juste après la génération de la sienne.</summary>
@@ -202,7 +206,7 @@ namespace DiceMultiplayer.Sync
             PendingSeed = null;
             var m = typeof(SeedSystem).GetMethod(nameof(SeedSystem.ForceSeed));
             m.Invoke(seedSystem, new object[] { s });
-            AddLog($"Seed synchronisée : {s}");
+            AddLog($"Seed synchronisée : {s} (lue après : {ReadSeed(seedSystem)})");
         }
 
         public static int ReadSeed(SeedSystem ss) => Game.Safe(() => ss.seed);
@@ -213,6 +217,11 @@ namespace DiceMultiplayer.Sync
         public static bool OnLocalClick(Il2CppObjectBase instance, PointerEventData data, MethodBase original)
         {
             if (!Active || Replaying) return true;
+            if (!Game.InRun)                            // lobby et sélection de personnage : chacun clique chez soi
+            {
+                if (Lobby.ClientWaiting) { Toast("En attente de l'hôte…"); return false; }
+                return true;
+            }
             if (ClickDepth++ > 0) return true;          // appel imbriqué (base.OnPointerClick) : déjà traité
 
             var comp = instance.TryCast<Component>();
@@ -221,7 +230,7 @@ namespace DiceMultiplayer.Sync
             string path = GoPath.Of(go);
 
             if (GoPath.PathContains(path, LocalOnlyKeywords())) return true;     // UI locale : options, sac, codex…
-            if (go.GetComponentInParent<FinishTurnUI>() != null) return true;     // fin de tour : gérée par le système « prêt »
+            if (IsFinishTurnButton(go)) return true;                              // fin de tour : gérée par le système « prêt »
 
             if (!CanAct(path, comp, out var why))
             {
@@ -363,20 +372,30 @@ namespace DiceMultiplayer.Sync
 
         public static IReadOnlyCollection<int> ReadyPlayers => _ready;
 
-        /// <summary>Clic local sur « Fin de tour ». Renvoie false pour bloquer l'action du jeu.</summary>
+        /// <summary>Vrai uniquement pendant la vraie fin de tour décidée par l'hôte (tout le monde prêt).</summary>
+        private static bool _executingEndTurn;
+
+        /// <summary>
+        /// Préfixe de FinishTurnUI.OnClickFinishTurnButton. Renvoie false pour bloquer l'action du jeu.
+        /// Seul ExecuteEndTurn la laisse passer : un clic rejoué ou un appel venu d'ailleurs ne termine jamais le tour d'un seul joueur.
+        /// </summary>
         public static bool OnLocalFinishTurn()
         {
-            if (!Active || Replaying) return true;
-            int turn = Game.Turn;
-            bool nowReady = !(_readyTurn == turn && _ready.Contains(LocalId));
-            Send(new Msg { t = T.Ready, turn = turn, flag = nowReady });
-            OnReady(LocalId, turn, nowReady);
+            if (!Active) return true;
+            if (_executingEndTurn) return true;
+            if (Replaying) return false;
+            bool nowReady = !_ready.Contains(LocalId);
+            Send(new Msg { t = T.Ready, turn = Game.Turn, flag = nowReady });
+            OnReady(LocalId, Game.Turn, nowReady);
             return false;
         }
 
+        /// <summary>Nouveau tour ou nouveau combat : plus personne n'est prêt.</summary>
+        public static void ClearReady() => _ready.Clear();
+
         private static void OnReady(int id, int turn, bool ready)
         {
-            if (_readyTurn != turn) { _ready.Clear(); _readyTurn = turn; }
+            // Pas de remise à zéro sur un numéro de tour différent : un léger décalage entre clients ne doit pas annuler le « prêt » des autres.
             if (ready) _ready.Add(id); else _ready.Remove(id);
             AddLog($"{NameOf(id)} {(ready ? "est prêt" : "n'est plus prêt")} ({_ready.Count}/{Net.Players.Count})");
 
@@ -392,7 +411,18 @@ namespace DiceMultiplayer.Sync
             _ready.Clear();
             var ui = UnityEngine.Object.FindObjectOfType<FinishTurnUI>();
             if (ui == null) { AddLog("Bouton de fin de tour introuvable"); return; }
-            WithReplay(() => ui.OnClickFinishTurnButton());
+            _executingEndTurn = true;
+            try { WithReplay(() => ui.OnClickFinishTurnButton()); }
+            finally { _executingEndTurn = false; }
+        }
+
+        /// <summary>Vrai si le GameObject cliqué est le bouton de fin de tour, ou l'un de ses enfants.</summary>
+        private static bool IsFinishTurnButton(GameObject go)
+        {
+            if (go.GetComponentInParent<FinishTurnUI>() != null) return true;
+            var ft = UnityEngine.Object.FindObjectOfType<FinishTurnUI>();
+            var btn = ft != null ? Game.Safe(() => ft.finishTurnButton) : null;
+            return btn != null && (go == btn.gameObject || go.transform.IsChildOf(btn.transform));
         }
 
         // ───────────── Détection de désynchronisation ─────────────

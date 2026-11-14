@@ -11,13 +11,20 @@ namespace DiceMultiplayer.Sync
     /// </summary>
     public static class GoPath
     {
+        // Le jeu nomme certains objets avec un nombre aléatoire (ex. "Board Slot(Clone) + -148733952"), différent
+        // à chaque instance : on le retire pour que les chemins soient identiques d'un joueur à l'autre.
+        private static readonly System.Text.RegularExpressions.Regex RandomSuffix =
+            new System.Text.RegularExpressions.Regex(@"\s*\+\s*-?\d+", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        public static string Normalize(string name) => RandomSuffix.Replace(name ?? "", "").Replace("/", "_").Replace("#", "_");
+
         public static string Of(GameObject go)
         {
             var parts = new List<string>();
             var t = go.transform;
             while (t != null)
             {
-                parts.Add(t.name.Replace("/", "_") + "#" + t.GetSiblingIndex());
+                parts.Add(Normalize(t.name) + "#" + t.GetSiblingIndex());
                 t = t.parent;
             }
             parts.Reverse();
@@ -31,6 +38,7 @@ namespace DiceMultiplayer.Sync
             Split(segs[0], out var rootName, out _);
 
             GameObject root = GameObject.Find("/" + rootName);
+            if (root == null || Normalize(root.name) != rootName) root = FindRoot(rootName);
             if (root == null) return null;
             var t = root.transform;
 
@@ -41,20 +49,32 @@ namespace DiceMultiplayer.Sync
                 if (idx >= 0 && idx < t.childCount)
                 {
                     var c = t.GetChild(idx);
-                    if (c.name.Replace("/", "_") == name) next = c;
+                    if (Normalize(c.name) == name) next = c;
                 }
                 if (next == null) // repli : premier enfant actif portant ce nom
                 {
                     for (int k = 0; k < t.childCount; k++)
                     {
                         var c = t.GetChild(k);
-                        if (c.name.Replace("/", "_") == name && (next == null || c.gameObject.activeInHierarchy)) next = c;
+                        if (Normalize(c.name) == name && (next == null || c.gameObject.activeInHierarchy)) next = c;
                     }
                 }
                 if (next == null) return null;
                 t = next;
             }
             return t.gameObject;
+        }
+
+        private static GameObject FindRoot(string normalizedName)
+        {
+            for (int s = 0; s < UnityEngine.SceneManagement.SceneManager.sceneCount; s++)
+            {
+                var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(s);
+                if (!scene.isLoaded) continue;
+                foreach (var go in scene.GetRootGameObjects())
+                    if (go != null && go.activeInHierarchy && Normalize(go.name) == normalizedName) return go;
+            }
+            return null;
         }
 
         private static void Split(string seg, out string name, out int idx)

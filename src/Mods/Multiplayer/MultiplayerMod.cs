@@ -12,8 +12,8 @@ namespace DiceMultiplayer
     /// Mod multijoueur coop (2 ou 3 joueurs) en TCP direct.
     /// Tout le monde joue la même run, synchronisée en lockstep sur les entrées. Voir Sync/Coop.cs.
     /// </summary>
-    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.1.0",
-        Author = "DiceModding", Description = "Coop à 2 ou 3 joueurs : même run, dés répartis, curseurs partagés (TCP).")]
+    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.2.3",
+        Author = "DiceModding", Description = "Coop à 2 ou 3 joueurs : chacun son personnage et ses dés, curseurs partagés (TCP).")]
     public class MultiplayerMod : DiceMod
     {
         public static MultiplayerMod Instance;
@@ -53,6 +53,7 @@ namespace DiceMultiplayer
             var net = Coop.Net;
             if (net == null) return;
             net.Pump();
+            try { Puppets.Update(); } catch (Exception e) { Logger.LogDebug("Puppets : " + e.Message); }
 
             if (Coop.Active && Time.unscaledTime >= _nextCursor)
             {
@@ -68,6 +69,15 @@ namespace DiceMultiplayer
         }
 
         public override void OnFloorStart(FloorSystem floor) => Coop.OnFloorStarted();
+
+        public override void OnBattleEnd(BattleSystem battle, BattleSystem.EndState result) => Coop.ClearReady();
+
+        public override void OnGameStateChanged(GameManager.GameState previous, GameManager.GameState current)
+        {
+            // Première arrivée sur la carte : le deck de l'hôte est chargé, on ajoute ceux des autres personnages
+            if (current == GameManager.GameState.Map) Game.Schedule(Team.MergeDecksIfNeeded, 0.5f);
+            if (current == GameManager.GameState.TitleScreen) Team.Picks.Clear();
+        }
 
         public override void OnTurnStart(BattleSystem battle, int turn)
         {
@@ -93,6 +103,30 @@ namespace DiceMultiplayer
             var ev = Event.current;
             if (ev != null) _mouse = new Vector2(ev.mousePosition.x, Screen.height - ev.mousePosition.y);
 
+            // Écran d'attente du client (avant que l'hôte n'ouvre la sélection)
+            if (Lobby.ClientWaiting && !_panelOpen)
+            {
+                Lobby.DrawWaitingScreen(() =>
+                {
+                    UI.BeginRow();
+                    if (UI.Button("Quitter la partie", 160)) { Coop.Detach(); Coop.AddLog("Session fermée."); }
+                    if (UI.Button("Panneau coop (F2)", 160)) _panelOpen = true;
+                    UI.EndRow();
+                });
+                if (ev != null && ev.type == EventType.KeyDown && ev.keyCode == KeyCode.F2) { _panelOpen = true; ev.Use(); }
+                return;
+            }
+
+            // Panneau coop : touche F2 ou bouton en haut à gauche
+            if (ev != null && ev.type == EventType.KeyDown && ev.keyCode == KeyCode.F2) { _panelOpen = !_panelOpen; ev.Use(); }
+            if (_panelOpen) DrawPanel();
+            else if (!Game.InRun)
+            {
+                GUILayout.BeginArea(new Rect(10, 10, 220, 34));
+                if (UI.Button(Coop.Active ? $"Coop : {Coop.Net.Players.Count} joueur(s) (F2)" : "Multijoueur coop (F2)")) _panelOpen = true;
+                GUILayout.EndArea();
+            }
+
             if (!Coop.Active) return;
             if (ev == null || ev.type != EventType.Repaint) return;
 
@@ -100,16 +134,27 @@ namespace DiceMultiplayer
             float w = 240, x = Screen.width - w - 10, y = 10;
             var players = Coop.Net.Players.OrderBy(p => p.Id).ToList();
             GUI.Box(new Rect(x, y, w, 26 + players.Count * 20 + (Game.InBattle ? 20 : 0)), "");
-            GUI.Label(new Rect(x + 8, y + 4, w, 20), $"<b>Coop</b> - meneur : <color={Coop.ColorOf(Coop.LeaderId)}>{Coop.NameOf(Coop.LeaderId)}</color>");
+            GUI.Label(new Rect(x + 8, y + 4, w, 20), $"<b>Coop (F2)</b> - meneur : <color={Coop.ColorOf(Coop.LeaderId)}>{Coop.NameOf(Coop.LeaderId)}</color>");
             y += 24;
             foreach (var p in players)
             {
-                string ready = Game.InBattle ? (Coop.ReadyPlayers.Contains(p.Id) ? "  ✔ prêt" : "  … joue") : "";
                 string me = p.Id == Coop.LocalId ? " (toi)" : "";
-                GUI.Label(new Rect(x + 8, y, w, 20), $"<color={p.Color}>●</color> {p.Name}{me}{ready}");
+                string extra;
+                if (!Game.InRun)
+                    extra = Team.Picks.TryGetValue(p.Id, out var pick) ? $"  ✔ {Team.Describe(pick)}" : "  … choisit";
+                else
+                {
+                    var rp = Team.RunPicks.FirstOrDefault(r => r.Id == p.Id);
+                    extra = rp != null ? $" ({(Player.CharacterName)rp.Run.Character})" : "";
+                    if (Game.InBattle) extra += Coop.ReadyPlayers.Contains(p.Id) ? "  ✔ prêt" : "  … joue";
+                }
+                GUI.Label(new Rect(x + 8, y, w, 20), $"<color={p.Color}>●</color> {p.Name}{me}{extra}");
                 y += 20;
             }
             if (Game.InBattle) GUI.Label(new Rect(x + 8, y, w, 20), "<i>Fin de tour : tout le monde doit valider</i>");
+
+            // Noms au-dessus des personnages
+            try { Puppets.DrawLabels(); } catch { }
 
             // Curseurs des autres joueurs
             if (_showCursors.Value)
@@ -132,6 +177,26 @@ namespace DiceMultiplayer
                 GUI.Box(new Rect(Screen.width / 2f - 200, 60, 400, 28), Coop.ToastText);
             if (Coop.DesyncWarning != null)
                 GUI.Label(new Rect(10, 10, 700, 40), $"<size=16><color=#ff5050><b>⚠ {Coop.DesyncWarning}</b></color></size>");
+        }
+
+        private bool _panelOpen;
+        private Vector2 _panelScroll;
+
+        private void DrawPanel()
+        {
+            var r = new Rect(10, 10, 460, Math.Min(620f, Screen.height - 20f));
+            GUI.Box(r, "");
+            GUILayout.BeginArea(new Rect(r.x + 10, r.y + 8, r.width - 20, r.height - 16));
+            UI.BeginRow();
+            UI.Header("Multijoueur coop");
+            GUILayout.FlexibleSpace();
+            if (UI.Button("Fermer (F2)", 110)) _panelOpen = false;
+            UI.EndRow();
+            _panelScroll = GUILayout.BeginScrollView(_panelScroll, UI.None);
+            try { OnSettingsGUI(); }
+            catch (Exception e) { UI.Label("Erreur : " + e.Message); Logger.LogError(e); }
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
         }
 
         private void DrawDiceOwners()
@@ -192,8 +257,8 @@ namespace DiceMultiplayer
             {
                 UI.Label($"{(net.IsHost ? "HÔTE" : "CLIENT")} - {net.Status}");
                 UI.Label("Joueurs : " + string.Join(", ", net.Players.Select(p => $"{p.Name}{(p.Id == net.LocalId ? " (toi)" : "")}")));
-                if (net.IsHost) UI.Label("Quand tout le monde est connecté, lance une nouvelle run : elle démarre chez tous les joueurs.");
-                else UI.Label("Attends que l'hôte lance la run.");
+                UI.Label("Chacun choisit son personnage (Nouvelle run) puis clique sur Commencer. La run démarre quand tout le monde est prêt.");
+
                 _rotateLeader.Value = UI.Toggle(_rotateLeader.Value, "Meneur tournant à chaque étage (à régler pareil chez tous)");
                 if (UI.Button("Quitter la partie")) { Coop.Detach(); Coop.AddLog("Session fermée."); }
 

@@ -82,6 +82,22 @@ namespace DiceMultiplayer.Sync
             P(h, typeof(GameManager), nameof(GameManager.StartRun), nameof(StartRunPrefix));
             P(h, typeof(GameManager), nameof(GameManager.LoadRun), nameof(LoadRunPrefix));
             P(h, typeof(SeedSystem), nameof(SeedSystem.StartRun), nameof(SeedStartRunPostfix), postfix: true);
+            P(h, typeof(ActiveDeck), nameof(ActiveDeck.AddDice), nameof(DeckAddDicePostfix), postfix: true);
+
+            // Diagnostic : qui remet la run à zéro ?
+            foreach (var m in new[] { nameof(RunInfo.Reset), nameof(RunInfo.ExitRun), nameof(RunInfo.EndUnfinishedRun), nameof(RunInfo.EndRun) })
+                P(h, typeof(RunInfo), m, nameof(RunResetTrace));
+
+            // 5) Lobby : sélection de personnage pilotée par l'hôte
+            var L = typeof(Lobby);
+            P(h, typeof(CanvasTitleScreen), nameof(CanvasTitleScreen.OnClickNewRunButtonPreCheckPopup), nameof(Lobby.NewRunPrefix), patchType: L);
+            P(h, typeof(CanvasTitleScreen), nameof(CanvasTitleScreen.OnClickNewRunButton), nameof(Lobby.NewRunPrefix), patchType: L);
+            P(h, typeof(CanvasTitleScreen), nameof(CanvasTitleScreen.OnClickNewRunButton), nameof(Lobby.NewRunPostfix), postfix: true, patchType: L);
+            P(h, typeof(CanvasTitleScreen), nameof(CanvasTitleScreen.OnClickReturnTitleButton), nameof(Lobby.ReturnPrefix), patchType: L);
+            P(h, typeof(CanvasTitleScreen), nameof(CanvasTitleScreen.OnClickReturnTitleButton), nameof(Lobby.ReturnPostfix), postfix: true, patchType: L);
+            P(h, typeof(CanvasTitleScreen), nameof(CanvasTitleScreen.OnClickContinueButton), nameof(Lobby.BlockedInCoopPrefix), patchType: L);
+            P(h, typeof(CanvasTitleScreen), nameof(CanvasTitleScreen.OnClickEndlessModeButton), nameof(Lobby.BlockedInCoopPrefix), patchType: L);
+            P(h, typeof(CanvasTitleScreen), nameof(CanvasTitleScreen.OnClickNewEndlessRunButton), nameof(Lobby.BlockedInCoopPrefix), patchType: L);
 
             MultiplayerMod.Instance.Logger.LogInfo($"Patchs multijoueur : {_ok}/{_total}");
         }
@@ -111,7 +127,7 @@ namespace DiceMultiplayer.Sync
             catch { return IntPtr.Zero; }
         }
 
-        private static void P(Harmony h, Type t, string method, string patch, bool postfix = false)
+        private static void P(Harmony h, Type t, string method, string patch, bool postfix = false, Type patchType = null)
         {
             _total++;
             try
@@ -119,7 +135,7 @@ namespace DiceMultiplayer.Sync
                 var m = t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
                          .Where(x => x.Name == method).OrderByDescending(x => x.GetParameters().Length).FirstOrDefault();
                 if (m == null) { MultiplayerMod.Instance.Logger.LogWarning($"Introuvable : {t.Name}.{method}"); return; }
-                var hm = new HarmonyMethod(typeof(Patches), patch);
+                var hm = new HarmonyMethod(patchType ?? typeof(Patches), patch);
                 if (postfix) h.Patch(m, postfix: hm); else h.Patch(m, prefix: hm);
                 _ok++;
             }
@@ -155,14 +171,17 @@ namespace DiceMultiplayer.Sync
         }
 
         // ───── Run ─────
-        private static RunInfo.NewRunData _hostPendingRun;
+        /// <summary>Hôte : run d'équipe en cours de lancement, envoyée avec la seed dans SeedSystem.StartRun.</summary>
+        public static Net.RunData HostPendingRun;
 
-        private static bool StartRunPrefix(RunInfo.NewRunData __0)
+        private static bool StartRunPrefix(RunInfo.NewRunData __0, ActiveCustomRun __1) => Team.OnLocalStartRun(__0, __1);
+
+        private static void DeckAddDicePostfix(ActiveDice __0) => Team.OnDiceAddedToDeck(__0);
+
+        private static void RunResetTrace(System.Reflection.MethodBase __originalMethod)
         {
-            if (!Coop.Active || Coop.Replaying) return true;
-            if (!Coop.IsHost) { Coop.Toast("Seul l'hôte peut lancer la run"); return false; }
-            _hostPendingRun = __0;   // envoyé quand la seed sera connue (SeedSystem.StartRun)
-            return true;
+            if (!Coop.Active) return;
+            Coop.AddLog($"[diag] RunInfo.{__originalMethod?.Name} appelé (état {DiceLoader.Game.State}, run {(RunInfo.CurrentRun != null ? "présente" : "absente")})");
         }
 
         private static bool LoadRunPrefix()
@@ -175,10 +194,14 @@ namespace DiceMultiplayer.Sync
         private static void SeedStartRunPostfix(SeedSystem __instance)
         {
             if (!Coop.Active) return;
-            if (Coop.IsHost && _hostPendingRun != null)
+            if (Coop.IsHost && HostPendingRun != null)
             {
-                Coop.HostBroadcastRun(_hostPendingRun, Coop.ReadSeed(__instance));
-                _hostPendingRun = null;
+                // La seed n'est pas encore générée ici (valeur par défaut 999) : l'hôte en tire une et la force chez tous, lui compris.
+                int seed = new Random().Next(1000, int.MaxValue);
+                Coop.PendingSeed = seed;
+                Coop.ApplyPendingSeed(__instance);
+                Coop.HostBroadcastRun(HostPendingRun, seed);
+                HostPendingRun = null;
             }
             else if (!Coop.IsHost) Coop.ApplyPendingSeed(__instance);
         }

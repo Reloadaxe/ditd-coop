@@ -66,7 +66,17 @@ foreach ($e in $entries) {
 }
 
 $launcherExe = Join-Path $root "launcher\bin\Release\net48\DitdCoopLauncher.exe"
-Copy-Item $launcherExe (Join-Path $dist "DitdCoopLauncher.exe") -Force
+$distLauncher = Join-Path $dist "DitdCoopLauncher.exe"
+# Même version de launcher que la dernière publication : on garde l'exe publié (le build n'est pas reproductible à l'octet près,
+# et le remplacer déclencherait une auto-mise à jour inutile chez les joueurs).
+if ((Test-Path $distLauncher) -and $ver.launcher -eq $LauncherVersion) {
+    $launcherExe = $distLauncher
+    Write-Host "Launcher v$LauncherVersion inchangé : exe publié conservé."
+} else {
+    try { Copy-Item $launcherExe $distLauncher -Force }
+    catch { throw "Impossible de remplacer dist\DitdCoopLauncher.exe : ferme le launcher puis relance publish.ps1." }
+    $launcherExe = $distLauncher
+}
 
 $manifest = [ordered]@{
     version   = $Version

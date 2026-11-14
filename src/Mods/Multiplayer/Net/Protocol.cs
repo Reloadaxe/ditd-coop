@@ -14,7 +14,10 @@ namespace DiceMultiplayer.Net
         public const string Cursor = "cursor";     // tous : id, x, y (0..1), scene
         public const string Chat = "chat";         // tous : id, text
         public const string Ping = "ping";         // keep-alive
-        public const string StartRun = "startrun"; // hôte → tous : run, seed
+        public const string StartRun = "startrun"; // hôte → tous : run (équipe fusionnée), picks, seed
+        public const string Pick = "pick";         // tous : run (choix de personnage), flag = prêt
+        public const string OpenSel = "opensel";   // hôte → clients : ouvrir la sélection de personnage
+        public const string CloseSel = "closesel"; // hôte → clients : retour à l'écran titre
         public const string Click = "click";       // action : path, comp, method, btn, x, y
         public const string PlaceDice = "place";   // action : uid, sx, sy
         public const string ReturnDice = "return"; // action : uid
@@ -42,6 +45,13 @@ namespace DiceMultiplayer.Net
         public bool Challenges;
     }
 
+    /// <summary>Choix de personnage d'un joueur dans le lobby.</summary>
+    public sealed class PlayerPick
+    {
+        public int Id;
+        public RunData Run;
+    }
+
     /// <summary>Message « plat » : seuls les champs utiles à chaque type sont remplis.</summary>
     public sealed class Msg
     {
@@ -65,6 +75,7 @@ namespace DiceMultiplayer.Net
         public string scene;
         public RunData run;
         public List<PlayerInfo> players;
+        public List<PlayerPick> picks;
 
         private static readonly JsonSerializerOptions Opt = new JsonSerializerOptions
         {
