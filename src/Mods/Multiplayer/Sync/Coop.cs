@@ -11,15 +11,16 @@ using UnityEngine.EventSystems;
 namespace DiceMultiplayer.Sync
 {
     /// <summary>
-    /// Contrôleur de la coop : reçoit les messages, rejoue les actions et gère qui a le droit de faire quoi.
+    /// Contrôleur de la coop.
     ///
-    /// Modèle « lockstep sur les entrées » :
-    ///  - tout le monde joue la même run (même personnage, même seed) ;
-    ///  - une action locale s'exécute tout de suite et part sur le réseau, puis les autres la rejouent ;
-    ///  - pour éviter les conflits, hors combat seul le *meneur* agit (carte, récompenses, événements, boutique) ;
-    ///    en combat, chacun ne manipule que ses propres dés ;
-    ///  - la fin de tour exige que tous les joueurs soient prêts ;
-    ///  - une empreinte de l'état est comparée à chaque tour pour détecter les désynchronisations.
+    /// Modèle « runs parallèles » : chaque joueur joue SA run (personnage, deck, main, énergie, PV, reliques,
+    /// récompenses), avec la même seed. On ne partage que :
+    ///  - la carte : seul le meneur choisit le chemin, ses clics sur la carte sont rejoués chez les autres,
+    ///    et il ne peut avancer que quand tout le monde est revenu sur la carte ;
+    ///  - les ennemis : dégâts partagés et correction des PV par l'hôte (Combat) ;
+    ///  - le plateau : affichage des dés des autres et cases bloquées (Board) ;
+    ///  - les héros : PV et bloc de chacun affichés chez les autres (Heroes) ;
+    ///  - la fin de tour : elle a lieu quand tout le monde est prêt.
     /// </summary>
     public static class Coop
     {
@@ -39,6 +40,7 @@ namespace DiceMultiplayer.Sync
         public static readonly Dictionary<int, (float x, float y, string scene, float time)> Cursors = new Dictionary<int, (float, float, string, float)>();
 
         private static readonly HashSet<int> _ready = new HashSet<int>();
+        private static readonly HashSet<int> _onMap = new HashSet<int>();
         private static readonly Dictionary<int, long> _hostHashes = new Dictionary<int, long>();
         private static readonly Dictionary<int, Dictionary<int, long>> _clientHashes = new Dictionary<int, Dictionary<int, long>>();
 
@@ -48,42 +50,22 @@ namespace DiceMultiplayer.Sync
 
         // ───────────── Rôles ─────────────
 
-        /// <summary>Id du meneur : l'hôte, ou un joueur différent à chaque étage si la rotation est activée.</summary>
+        private static int _floorCounter;
+        public static void OnFloorStarted() => _floorCounter++;
+
+        /// <summary>Id du meneur (celui qui choisit le chemin) : l'hôte, ou à tour de rôle à chaque étage.</summary>
         public static int LeaderId
         {
             get
             {
                 if (!Active || Net.Players.Count == 0) return 0;
                 if (!RotateLeader()) return 0;
-                int floor = _floorCounter;
                 var ordered = Net.Players.OrderBy(p => p.Id).ToList();
-                return ordered[Math.Abs(floor) % ordered.Count].Id;
+                return ordered[Math.Abs(_floorCounter) % ordered.Count].Id;
             }
         }
 
-        private static int _floorCounter;
-        private static int RunFloorIndex() => _floorCounter;
-        public static void OnFloorStarted() => _floorCounter++;
-
         public static bool IsLeader => !Active || LeaderId == LocalId;
-
-        /// <summary>Propriétaire d'un dé : celui dont le personnage l'a apporté (Team), sinon répartition stable par uid.</summary>
-        public static int OwnerOfDice(int uid)
-        {
-            if (!Active) return LocalId;
-            var known = Team.OwnerOf(uid);
-            if (known != null && GetPlayer(known.Value) != null) return known.Value;
-            var ordered = Net.Players.OrderBy(p => p.Id).ToList();
-            return ordered[((uid % ordered.Count) + ordered.Count) % ordered.Count].Id;
-        }
-
-        public static bool OwnsDice(GameObjectDice d)
-        {
-            if (!Active || d == null) return true;
-            var ad = Game.Safe(() => d.CurrentActiveDice);
-            if (ad == null) return true;
-            return OwnerOfDice(ad.uid) == LocalId;
-        }
 
         public static PlayerInfo GetPlayer(int id) => Net?.GetPlayer(id);
         public static string NameOf(int id) => id < 0 ? "Système" : GetPlayer(id)?.Name ?? ("#" + id);
@@ -106,11 +88,24 @@ namespace DiceMultiplayer.Sync
             Net = null;
             Cursors.Clear();
             _ready.Clear();
+            _onMap.Clear();
             DesyncWarning = null;
             PendingSeed = null;
             _floorCounter = 0;
             Team.Reset();
             Lobby.Reset();
+            Heroes.Reset();
+            Board.Reset();
+        }
+
+        public static void OnRunStarted()
+        {
+            _floorCounter = 0;
+            _ready.Clear();
+            _onMap.Clear();
+            DesyncWarning = null;
+            Heroes.Reset();
+            Board.Reset();
         }
 
         public static void AddLog(string s)
@@ -132,22 +127,27 @@ namespace DiceMultiplayer.Sync
                 {
                     case T.Cursor: Cursors[m.id] = (m.x, m.y, m.scene, Time.unscaledTime); break;
                     case T.Chat: AddLog($"{NameOf(m.id)} : {m.text}"); break;
-                    case T.StartRun: ApplyStartRun(m); break;
+                    case T.StartRun: Team.OnStartRun(m); break;
                     case T.Pick: Team.OnRemotePick(m); break;
                     case T.OpenSel: Lobby.OnOpenSelection(); break;
                     case T.CloseSel: Lobby.OnCloseSelection(); break;
                     case T.Click: ReplayClick(m); break;
-                    case T.PlaceDice: ReplayPlaceDice(m); break;
-                    case T.ReturnDice: ReplayReturnDice(m); break;
                     case T.Ready: OnReady(m.id, m.turn, m.flag); break;
                     case T.EndTurn: ExecuteEndTurn(); break;
                     case T.Hash: OnRemoteHash(m); break;
                     case T.Desync: DesyncWarning = m.text; AddLog("<color=#ff6060>" + m.text + "</color>"); break;
+                    case T.HeroState: Heroes.OnRemoteState(m); break;
+                    case T.BoardPlace: Board.OnRemotePlace(m); break;
+                    case T.BoardRemove: Board.OnRemoteRemove(m); break;
+                    case T.BoardClear: Board.OnRemoteClear(m); break;
+                    case T.EnemyDamage: Combat.OnRemoteDamage(m); break;
+                    case T.EnemySync: Combat.OnEnemySync(m); break;
+                    case T.OnMap: if (m.flag) _onMap.Add(m.id); else _onMap.Remove(m.id); break;
                 }
             }
             catch (Exception e)
             {
-                AddLog($"Erreur en rejouant « {m.t} » de {NameOf(m.id)} : {e.Message}");
+                AddLog($"Erreur en traitant « {m.t} » de {NameOf(m.id)} : {e.Message}");
                 MultiplayerMod.Instance?.Logger.LogError(e);
             }
         }
@@ -164,43 +164,15 @@ namespace DiceMultiplayer.Sync
 
         // ───────────── Lancement de run ─────────────
 
-        /// <summary>Hôte : appelé après SeedSystem.StartRun, quand la seed est connue.</summary>
-        public static void HostBroadcastRun(RunData team, int seed)
-        {
-            Send(new Msg { t = T.StartRun, run = team, seed = seed, picks = Team.RunPicks });
-            _floorCounter = 0;
-            Team.OnHostTeamRunStarted();
-            Heroes.OnTeamRunStarted();
-            Lobby.OnRunStarted();
-            AddLog($"Run d'équipe lancée pour tous (seed {seed}) : " +
-                   string.Join(", ", Team.RunPicks.Select(p => $"{NameOf(p.Id)} = {(Player.CharacterName)p.Run.Character}")));
-        }
-
         /// <summary>Lance GameManager.StartRun sans que nos patchs l'interceptent.</summary>
-        public static void StartRunReplaying(RunInfo.NewRunData data)
+        public static void StartRunReplaying(RunInfo.NewRunData data, ActiveCustomRun custom)
         {
             var gm = Game.Manager;
             if (gm == null) { AddLog("GameManager introuvable : impossible de lancer la run."); return; }
-            var custom = Team.LocalCustomRun;
-            if (custom == null) AddLog("Attention : aucun ActiveCustomRun local (as-tu cliqué sur Commencer ?)");
             WithReplay(() => gm.StartRun(data, custom, true));
         }
 
-        private static void ApplyStartRun(Msg m)
-        {
-            if (m.run == null) return;
-            Team.OnTeamRunReceived(m);
-            Heroes.OnTeamRunStarted();
-            Lobby.OnRunStarted();
-            PendingSeed = m.seed;
-            _floorCounter = 0;
-            AddLog($"Run d'équipe lancée par {NameOf(m.id)} (seed {m.seed}) : " +
-                   string.Join(", ", Team.RunPicks.Select(p => $"{NameOf(p.Id)} = {(Player.CharacterName)p.Run.Character}")));
-            var data = Team.ToNewRunData(m.run);
-            Game.Schedule(() => StartRunReplaying(data), 0.1f);
-        }
-
-        /// <summary>Client : force la seed de l'hôte juste après la génération de la sienne.</summary>
+        /// <summary>Appelé après SeedSystem.StartRun : force la seed commune, chez tous (hôte compris).</summary>
         public static void ApplyPendingSeed(SeedSystem seedSystem)
         {
             if (PendingSeed == null || seedSystem == null) return;
@@ -210,8 +182,7 @@ namespace DiceMultiplayer.Sync
             m.Invoke(seedSystem, new object[] { s });
 
             // ForceSeed n'écrit que le champ seed. SeedSystem.StartRun a déjà créé ses 4 générateurs statiques à partir
-            // de SA seed : on les recrée comme le jeu le fait (Random(seed + étape)), sinon dés, reliques, récompenses
-            // et potions divergeraient entre les joueurs.
+            // de SA seed : on les recrée comme le jeu le fait (Random(seed + étape)).
             try
             {
                 SeedSystem.DiceRNG = SeedSystem.Rng.GetRandomRng(SeedSystem.Rng.Context.Dice);
@@ -220,14 +191,21 @@ namespace DiceMultiplayer.Sync
                 SeedSystem.PotionRNG = SeedSystem.Rng.GetRandomRng(SeedSystem.Rng.Context.Potion);
             }
             catch (Exception e) { AddLog("Générateurs aléatoires non resynchronisés : " + e.Message); }
-            AddLog($"Seed synchronisée : {s} (lue après : {ReadSeed(seedSystem)})");
+            AddLog($"Seed commune appliquée : {s}");
         }
 
-        public static int ReadSeed(SeedSystem ss) => Game.Safe(() => ss.seed);
+        // ───────────── Carte : chemin choisi par le meneur ─────────────
 
-        // ───────────── Clics génériques ─────────────
+        /// <summary>Signale aux autres que je suis sur la carte (fin de mon étage : récompenses, événement, boutique terminés).</summary>
+        public static void SetOnMap(bool onMap)
+        {
+            if (onMap) _onMap.Add(LocalId); else _onMap.Remove(LocalId);
+            Send(new Msg { t = T.OnMap, flag = onMap });
+        }
 
-        /// <summary>Patch préfixe posé sur toutes les méthodes OnPointerClick du jeu et de l'UI Unity. Renvoie false pour bloquer.</summary>
+        public static IEnumerable<int> NotOnMap => Net?.Players.Where(p => !_onMap.Contains(p.Id)).Select(p => p.Id) ?? Enumerable.Empty<int>();
+
+        /// <summary>Patch préfixe posé sur les OnPointerClick du jeu et de l'UI Unity. Renvoie false pour bloquer.</summary>
         public static bool OnLocalClick(Il2CppObjectBase instance, PointerEventData data, MethodBase original)
         {
             if (!Active || Replaying) return true;
@@ -236,29 +214,25 @@ namespace DiceMultiplayer.Sync
                 if (Lobby.ClientWaiting) { Toast("En attente de l'hôte…"); return false; }
                 return true;
             }
+            // Hors de la carte, chacun joue SA run : rien n'est répliqué
+            if (Game.State != GameManager.GameState.Map) return true;
             if (ClickDepth++ > 0) return true;          // appel imbriqué (base.OnPointerClick) : déjà traité
 
             var comp = instance.TryCast<Component>();
             if (comp == null) return true;
             var go = comp.gameObject;
             string path = GoPath.Of(go);
+            if (GoPath.PathContains(path, LocalOnlyKeywords())) return true;     // sac, options, codex… : local
 
-            if (GoPath.PathContains(path, LocalOnlyKeywords())) return true;     // UI locale : options, sac, codex…
-            if (IsFinishTurnButton(go)) return true;                              // fin de tour : gérée par le système « prêt »
-
-            if (!CanAct(path, comp, out var why))
-            {
-                ClickDepth = 0;
-                Toast(why);
-                return false;
-            }
+            if (!IsLeader) { ClickDepth = 0; Toast($"C'est {NameOf(LeaderId)} qui choisit le chemin"); return false; }
+            var waiting = NotOnMap.ToList();
+            if (waiting.Count > 0) { ClickDepth = 0; Toast("En attente de " + string.Join(", ", waiting.Select(NameOf))); return false; }
 
             var pos = data != null ? data.position : Vector2.zero;
             Send(new Msg
             {
                 t = T.Click,
                 path = path,
-                // Vrai type IL2CPP de l'objet : la méthode patchée peut être une fonction native fusionnée avec celle d'un autre type
                 comp = Game.Safe(() => comp.GetIl2CppType().FullName) ?? original.DeclaringType?.FullName,
                 method = "OnPointerClick",
                 btn = data != null ? (int)data.button : 0,
@@ -270,23 +244,8 @@ namespace DiceMultiplayer.Sync
 
         public static void EndLocalClick() { if (ClickDepth > 0) ClickDepth--; }
 
-        private static bool CanAct(string path, Component comp, out string why)
-        {
-            why = null;
-            bool inSelectPhase = Game.InBattle && Game.TurnState == BattleSystem.TurnState.SelectDice;
-            if (inSelectPhase)
-            {
-                var dice = comp.GetComponentInParent<GameObjectDice>();
-                if (dice != null && !OwnsDice(dice)) { why = $"Ce dé appartient à {NameOf(OwnerOfDice(dice.CurrentActiveDice.uid))}"; return false; }
-                return true;
-            }
-            if (!IsLeader) { why = $"C'est {NameOf(LeaderId)} qui décide ici"; return false; }
-            return true;
-        }
-
         private static readonly Dictionary<string, Type> _typeCache = new Dictionary<string, Type>();
 
-        /// <summary>Type d'interop C# correspondant à un nom de type IL2CPP (ex. "VisualMapTile", "UnityEngine.UI.Button").</summary>
         private static Type ResolveManagedType(string il2cppName)
         {
             if (string.IsNullOrEmpty(il2cppName)) return null;
@@ -300,99 +259,31 @@ namespace DiceMultiplayer.Sync
 
         private static void ReplayClick(Msg m)
         {
+            if (Game.State != GameManager.GameState.Map) { AddLog($"Clic de carte de {NameOf(m.id)} ignoré : tu n'es pas sur la carte."); return; }
             var go = GoPath.Find(m.path);
             if (go == null) { AddLog($"Clic de {NameOf(m.id)} introuvable : {m.path}"); return; }
-
             var type = ResolveManagedType(m.comp);
             if (type == null) { AddLog($"Type inconnu : {m.comp}"); return; }
-
-            var il2Type = Il2CppInterop.Runtime.Il2CppType.From(type);
-            var comp = go.GetComponent(il2Type);
+            var comp = go.GetComponent(Il2CppInterop.Runtime.Il2CppType.From(type));
             if (comp == null) { AddLog($"Composant {type.Name} absent sur {go.name}"); return; }
-
             var wrapper = typeof(Il2CppObjectBase).GetMethod(nameof(Il2CppObjectBase.TryCast)).MakeGenericMethod(type).Invoke(comp, null);
             var method = type.GetMethod(m.method, new[] { typeof(PointerEventData) });
             if (wrapper == null || method == null) return;
-
             var ped = new PointerEventData(EventSystem.current)
             {
                 button = (PointerEventData.InputButton)m.btn,
                 position = new Vector2(m.x * Screen.width, m.y * Screen.height),
-                pointerPress = go,
-                rawPointerPress = go,
-                pointerEnter = go,
-                clickCount = 1,
+                pointerPress = go, rawPointerPress = go, pointerEnter = go, clickCount = 1,
             };
             WithReplay(() => method.Invoke(wrapper, new object[] { ped }));
-        }
-
-        // ───────────── Dés (glisser-déposer) ─────────────
-
-        public static void OnLocalPlaceDice(BoardSlot slot, GameObjectDice dice)
-        {
-            if (!Active || Replaying || ClickDepth > 0) return; // un clic l'a déjà transmis
-            var ad = dice?.CurrentActiveDice;
-            if (ad == null || slot == null) return;
-            var c = slot.CurrentCoord;
-            Send(new Msg { t = T.PlaceDice, uid = ad.uid, sx = c.x, sy = c.y });
-        }
-
-        public static void OnLocalReturnDice(GameObjectDice dice)
-        {
-            if (!Active || Replaying || ClickDepth > 0) return;
-            var ad = dice?.CurrentActiveDice;
-            if (ad == null || !Game.InBattle || Game.TurnState != BattleSystem.TurnState.SelectDice) return;
-            Send(new Msg { t = T.ReturnDice, uid = ad.uid });
-        }
-
-        private static GameObjectDice FindDice(int uid)
-        {
-            foreach (var d in UnityEngine.Object.FindObjectsOfType<GameObjectDice>())
-            {
-                var ad = Game.Safe(() => d.CurrentActiveDice);
-                if (ad != null && ad.uid == uid) return d;
-            }
-            return null;
-        }
-
-        private static BoardSlot FindSlot(int x, int y)
-        {
-            foreach (var s in UnityEngine.Object.FindObjectsOfType<BoardSlot>())
-            {
-                var c = s.CurrentCoord;
-                if (c.x == x && c.y == y && s.gameObject.activeInHierarchy) return s;
-            }
-            return null;
-        }
-
-        private static void ReplayPlaceDice(Msg m)
-        {
-            var dice = FindDice(m.uid);
-            var slot = FindSlot(m.sx, m.sy);
-            var board = UnityEngine.Object.FindObjectOfType<BattleBoard>();
-            if (dice == null || slot == null || board == null) { AddLog($"Pose de dé impossible (uid {m.uid} → {m.sx},{m.sy})"); return; }
-            WithReplay(() => board.PlaceDiceOnBoard(slot, dice, Game.Player, BattleBoard.PlaceDiceContext.Player));
-        }
-
-        private static void ReplayReturnDice(Msg m)
-        {
-            var dice = FindDice(m.uid);
-            var ret = UnityEngine.Object.FindObjectOfType<ReturnDiceToHand>();
-            if (dice == null || ret == null) return;
-            WithReplay(() => ret.ExecuteReturnDiceToHand(dice, true));
         }
 
         // ───────────── Fin de tour collective ─────────────
 
         public static IReadOnlyCollection<int> ReadyPlayers => _ready;
-
-        /// <summary>Vrai uniquement pendant la vraie fin de tour décidée par l'hôte (tout le monde prêt).</summary>
         private static bool _executingEndTurn;
 
-        /// <summary>
-        /// Préfixe de FinishTurnUI.OnClickFinishTurnButton. Renvoie false pour bloquer l'action du jeu.
-        /// Seul ExecuteEndTurn la laisse passer : un clic rejoué ou un appel venu d'ailleurs ne termine jamais le tour d'un seul joueur.
-        /// </summary>
+        /// <summary>Préfixe de FinishTurnUI.OnClickFinishTurnButton : déclare « prêt ». Le tour ne finit que quand tout le monde l'est.</summary>
         public static bool OnLocalFinishTurn()
         {
             if (!Active) return true;
@@ -404,15 +295,12 @@ namespace DiceMultiplayer.Sync
             return false;
         }
 
-        /// <summary>Nouveau tour ou nouveau combat : plus personne n'est prêt.</summary>
         public static void ClearReady() => _ready.Clear();
 
         private static void OnReady(int id, int turn, bool ready)
         {
-            // Pas de remise à zéro sur un numéro de tour différent : un léger décalage entre clients ne doit pas annuler le « prêt » des autres.
             if (ready) _ready.Add(id); else _ready.Remove(id);
             AddLog($"{NameOf(id)} {(ready ? "est prêt" : "n'est plus prêt")} ({_ready.Count}/{Net.Players.Count})");
-
             if (IsHost && Net.Players.All(p => _ready.Contains(p.Id)))
             {
                 Send(new Msg { t = T.EndTurn, turn = turn });
@@ -430,16 +318,7 @@ namespace DiceMultiplayer.Sync
             finally { _executingEndTurn = false; }
         }
 
-        /// <summary>Vrai si le GameObject cliqué est le bouton de fin de tour, ou l'un de ses enfants.</summary>
-        private static bool IsFinishTurnButton(GameObject go)
-        {
-            if (go.GetComponentInParent<FinishTurnUI>() != null) return true;
-            var ft = UnityEngine.Object.FindObjectOfType<FinishTurnUI>();
-            var btn = ft != null ? Game.Safe(() => ft.finishTurnButton) : null;
-            return btn != null && (go == btn.gameObject || go.transform.IsChildOf(btn.transform));
-        }
-
-        // ───────────── Détection de désynchronisation ─────────────
+        // ───────────── Détection de désynchronisation (ennemis uniquement) ─────────────
 
         public static void SubmitHash(int key, long hash, string detail)
         {
@@ -465,10 +344,9 @@ namespace DiceMultiplayer.Sync
         private static void Compare(int key, int playerId, long hash)
         {
             if (!_hostHashes.TryGetValue(key, out var mine) || mine == hash) return;
-            var text = $"Désynchronisation détectée avec {NameOf(playerId)} (point {key}). Les parties ont divergé.";
-            DesyncWarning = text;
-            Send(new Msg { t = T.Desync, text = text });
-            AddLog("<color=#ff6060>" + text + "</color>");
+            var text = $"Ennemis différents chez {NameOf(playerId)} (tour {key % 1000}) : correction envoyée.";
+            AddLog("<color=#ffb060>" + text + "</color>");
+            Combat.HostBroadcastEnemies();
         }
 
         // ───────────── Divers ─────────────

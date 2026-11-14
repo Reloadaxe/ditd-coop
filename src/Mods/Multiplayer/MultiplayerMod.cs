@@ -12,8 +12,8 @@ namespace DiceMultiplayer
     /// Mod multijoueur coop (2 ou 3 joueurs) en TCP direct.
     /// Tout le monde joue la même run, synchronisée en lockstep sur les entrées. Voir Sync/Coop.cs.
     /// </summary>
-    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.3.4",
-        Author = "DiceModding", Description = "Coop à 2 ou 3 joueurs : chacun son personnage et ses dés, curseurs partagés (TCP).")]
+    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.4.0",
+        Author = "DiceModding", Description = "Coop à 2 ou 3 : chacun sa run et son héros, ennemis et plateau partagés (TCP).")]
     public class MultiplayerMod : DiceMod
     {
         public static MultiplayerMod Instance;
@@ -28,7 +28,7 @@ namespace DiceMultiplayer
             set { if (_nameOverride != null) _nameOverride = value; else _name.Value = value; }
         }
         private ConfigEntry<int> _port;
-        private ConfigEntry<bool> _rotateLeader, _showCursors, _showOwnership;
+        private ConfigEntry<bool> _rotateLeader, _showCursors;
         private string _chat = "";
         private Vector2 _mouse;
         private float _nextCursor;
@@ -46,7 +46,6 @@ namespace DiceMultiplayer
             _port = Config.Bind("Réseau", "Port", 27015, "Port TCP");
             _rotateLeader = Config.Bind("Règles", "MeneurTournant", false, "Le meneur (carte, récompenses, boutique) change à chaque étage");
             _showCursors = Config.Bind("Affichage", "Curseurs", true, "Afficher les curseurs des autres joueurs");
-            _showOwnership = Config.Bind("Affichage", "ProprietaireDes", true, "Afficher le nom du propriétaire sous chaque dé de la main");
             _localOnly = Config.Bind("Règles", "UILocale", "Settings,Pause,Backpack,Codex,Feedback,Tooltip,Glossary,Options",
                 "Mots-clés de chemins d'UI dont les clics restent locaux (non synchronisés), séparés par des virgules");
 
@@ -66,7 +65,7 @@ namespace DiceMultiplayer
             if (net == null) return;
             net.Pump();
             try { Heroes.Update(); } catch (Exception e) { Logger.LogDebug("Heroes : " + e.Message); }
-            try { Draw.UpdateHandVisibility(); } catch (Exception e) { Logger.LogDebug("Draw : " + e.Message); }
+
 
             if (Coop.Active && Time.unscaledTime >= _nextCursor)
             {
@@ -83,15 +82,21 @@ namespace DiceMultiplayer
 
         public override void OnFloorStart(FloorSystem floor) => Coop.OnFloorStarted();
 
-        public override void OnBattleStart(BattleSystem battle) => Draw.OnBattleStart();
+        public override void OnBattleStart(BattleSystem battle) => Board.Reset();
 
-        public override void OnTurnStateChanged(BattleSystem battle, BattleSystem.TurnState state) => Draw.OnTurnState(state);
+        public override void OnTurnStateChanged(BattleSystem battle, BattleSystem.TurnState state)
+        {
+            if (!Coop.Active) return;
+            // Fin de mon tour : mes dés quittent le plateau chez les autres
+            if (state == BattleSystem.TurnState.EndTurn) Board.OnLocalTurnEnd();
+            // Début de tour : l'hôte envoie les PV de référence des ennemis (une fois les coups du tour précédent arrivés)
+            if (state == BattleSystem.TurnState.StartTurn && Coop.IsHost) Game.Schedule(Combat.HostBroadcastEnemies, 0.8f);
+        }
 
         public override void OnBattleEnd(BattleSystem battle, BattleSystem.EndState result)
         {
             Coop.ClearReady();
-            Draw.OnBattleEnd();
-            if (result == BattleSystem.EndState.Win) Heroes.OnBattleWon();
+            Board.Reset();
         }
 
         private static bool _attackWarm;
@@ -120,15 +125,15 @@ namespace DiceMultiplayer
 
         public override void OnGameStateChanged(GameManager.GameState previous, GameManager.GameState current)
         {
-            // Première arrivée sur la carte : le deck de l'hôte est chargé, on ajoute ceux des autres personnages
-            if (current == GameManager.GameState.Map)
-            {
-                PrewarmAttack();
-                Game.Schedule(Team.MergeDecksIfNeeded, 0.5f);
-            }
-            if (Coop.Active && current == GameManager.GameState.BattleFloor)
-                Coop.AddLog($"[diag] Combat : RunInfo.CurrentRun {(RunInfo.CurrentRun != null ? "présente" : "ABSENTE")}");
+            if (current == GameManager.GameState.Map) PrewarmAttack();
             if (current == GameManager.GameState.TitleScreen) Team.Picks.Clear();
+
+            // De retour sur la carte = mon étage est fini (récompenses, événement, boutique) : le meneur peut avancer
+            if (Coop.Active && Game.InRun)
+            {
+                if (current == GameManager.GameState.Map) Coop.SetOnMap(true);
+                else if (previous == GameManager.GameState.Map) Coop.SetOnMap(false);
+            }
         }
 
         public override void OnTurnStart(BattleSystem battle, int turn)
@@ -221,8 +226,8 @@ namespace DiceMultiplayer
                 }
             }
 
-            // Propriétaire de chaque dé en main
-            if (_showOwnership.Value && Game.InBattle) DrawDiceOwners();
+            // Dés posés par les autres joueurs sur le plateau
+            try { Board.DrawGhosts(); } catch { }
 
             // Toast et alerte de désynchronisation
             if (Coop.ToastText != null && Time.unscaledTime < Coop.ToastUntil)
@@ -251,36 +256,6 @@ namespace DiceMultiplayer
             GUILayout.EndArea();
         }
 
-        private void DrawDiceOwners()
-        {
-            var dm = Game.Dice;
-            var hand = Game.Safe(() => dm?.GetAllGODicesOnHand());
-            if (hand == null) return;
-            foreach (var d in hand)
-            {
-                try
-                {
-                    var ad = d.CurrentActiveDice;
-                    if (ad == null) continue;
-                    var sp = ScreenPos(d.transform);
-                    if (sp == null) continue;
-                    int owner = Coop.OwnerOfDice(ad.uid);
-                    GUI.Label(new Rect(sp.Value.x - 40, Screen.height - sp.Value.y + 34, 80, 20),
-                        $"<color={Coop.ColorOf(owner)}><b>{Coop.NameOf(owner)}</b></color>");
-                }
-                catch { }
-            }
-        }
-
-        private static Vector2? ScreenPos(Transform t)
-        {
-            var canvas = t.GetComponentInParent<Canvas>();
-            if (canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay) return t.position;
-            var cam = canvas != null && canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
-            if (cam == null) return null;
-            var p = cam.WorldToScreenPoint(t.position);
-            return p.z < 0 ? (Vector2?)null : new Vector2(p.x, p.y);
-        }
 
         // ───────────── Page du menu F1 ─────────────
 
@@ -327,7 +302,6 @@ namespace DiceMultiplayer
             }
 
             _showCursors.Value = UI.Toggle(_showCursors.Value, "Afficher les curseurs des autres");
-            _showOwnership.Value = UI.Toggle(_showOwnership.Value, "Afficher le propriétaire des dés");
 
             UI.Space();
             UI.Header("Journal");

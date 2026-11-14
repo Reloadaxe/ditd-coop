@@ -16,6 +16,13 @@ namespace DiceMultiplayer.Net
         public const string Ping = "ping";         // keep-alive
         public const string StartRun = "startrun"; // hôte → tous : run (équipe fusionnée), picks, seed
         public const string Pick = "pick";         // tous : run (choix de personnage), flag = prêt
+        public const string HeroState = "hero";    // tous : état de son héros (h = PV, sx = PV max, sy = bloc, flag = K.O.)
+        public const string BoardPlace = "bplace"; // tous : dé posé (uid, sx, sy, text = nom, btn = valeur)
+        public const string BoardRemove = "bremove"; // tous : dé retiré (uid)
+        public const string BoardClear = "bclear"; // tous : plateau du joueur vidé (fin de tour)
+        public const string EnemyDamage = "edmg";  // tous : dégâts à l'ennemi d'index uid (btn = dégâts, flag = ignore le bloc, x>0 = coup fatal)
+        public const string EnemySync = "esync";   // hôte → tous : PV de référence des ennemis (text = "idx:pv:bloc;…")
+        public const string OnMap = "onmap";       // tous : flag = de retour sur la carte et prêt à continuer
         public const string OpenSel = "opensel";   // hôte → clients : ouvrir la sélection de personnage
         public const string CloseSel = "closesel"; // hôte → clients : retour à l'écran titre
         public const string Click = "click";       // action : path, comp, method, btn, x, y

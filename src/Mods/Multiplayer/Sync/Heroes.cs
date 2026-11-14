@@ -8,251 +8,182 @@ using UnityEngine;
 namespace DiceMultiplayer.Sync
 {
     /// <summary>
-    /// Un vrai héros par joueur.
+    /// Héros des autres joueurs, affichés à côté du tien.
     ///
-    /// Le héros de l'hôte est celui du jeu : FloorSystem.CurrentPlayer et BattleSystem.Player le désignent.
-    /// Pour chaque autre joueur, on fait comme FloorSystem.SpawnPlayer :
-    ///   GameData.GetPlayerData(personnage).prefab → Instantiate → GetComponent&lt;Player&gt; → LoadSkin → LoadEntityData.
-    /// Ses données de vie (ActiveEntity : PV, PV max, bloc) appartiennent au mod et persistent d'un étage à l'autre.
-    /// Tout est déterministe, donc identique chez tous les joueurs.
-    ///
-    /// Étape 1 : chaque héros est un vrai Player, propriétaire des dés de son joueur (bloc, soins et attaques lui reviennent).
-    /// Étape 2 : chaque coup d'ennemi porté au héros de l'hôte est rejoué sur chaque autre héros debout.
-    /// Étape 4 : à 0 PV, un héros supplémentaire est K.O. jusqu'à la fin du combat, puis revient à 1 PV en cas de victoire.
+    /// Chaque joueur joue son héros dans SA run. Chez toi, les héros des autres sont des visuels :
+    /// le prefab de leur personnage (GameData.GetPlayerData), instancié sous un parent inactif pour
+    /// qu'aucun script ne démarre, puis débarrassé de ses scripts, canvas et colliders. Il ne reste que
+    /// les sprites et l'Animator, avec le skin choisi.
+    /// Leurs PV et leur bloc viennent du réseau : chaque joueur envoie l'état de SON héros (message HeroState).
+    /// Le visuel reprend l'animation de ton héros, pour suivre le rythme du combat.
     /// </summary>
     public static class Heroes
     {
-        public sealed class Hero
+        public sealed class Remote
         {
             public int PlayerId;
-            public PlayerPick Pick;
-            public ActiveEntity Data;
-            public Player Entity;
-            public bool KO;
+            public GameObject Go;
+            public Animator Anim;
+            public int LastState;
             public Vector3 Offset;
+            public int Hp, MaxHp, Block;
+            public bool KO;
+            public float LastUpdate;
         }
 
-        private static readonly Dictionary<int, Hero> _heroes = new Dictionary<int, Hero>();
-        private static Player _host;
-        private static float _nextCheck;
+        private static readonly Dictionary<int, Remote> _remotes = new Dictionary<int, Remote>();
+        private static Player _local;
+        private static float _nextSend, _nextCheck;
+        private static string _lastSent;
 
-        public static IEnumerable<Hero> All => _heroes.Values;
-        public static bool Enabled => Coop.Active && Team.RunPicks.Count > 1;
+        public static IEnumerable<Remote> All => _remotes.Values;
 
-        // ───────────── Création des données (début de run) ─────────────
+        private static bool InScene(Player p) => p != null && Game.Safe(() => p.gameObject.activeInHierarchy)
+            && (Game.State == GameManager.GameState.BattleFloor || Game.State == GameManager.GameState.EventFloor
+                || Game.State == GameManager.GameState.ShopFloor || Game.State == GameManager.GameState.LootFloor);
 
-        /// <summary>Appelé au lancement de la run d'équipe, chez tous et dans le même ordre.</summary>
-        public static void OnTeamRunStarted()
+        public static void Reset()
         {
             DespawnAll();
-            _heroes.Clear();
+            _remotes.Clear();
+            _lastSent = null;
         }
 
-        private static Hero GetOrCreate(PlayerPick pick)
+        // ───────────── État de mon héros → réseau ─────────────
+
+        private static void SendLocalState()
         {
-            if (_heroes.TryGetValue(pick.Id, out var h)) return h;
-            var pd = PlayerDataOf(pick);
-            h = new Hero { PlayerId = pick.Id, Pick = pick, Data = new ActiveEntity(pd.data) };
-            _heroes[pick.Id] = h;
-            Coop.AddLog($"Héros de {Coop.NameOf(pick.Id)} créé : {(Player.CharacterName)pick.Run.Character}, {h.Data.CurrentHealth}/{h.Data.MaxHealth} PV.");
-            return h;
+            if (Time.unscaledTime < _nextSend) return;
+            _nextSend = Time.unscaledTime + 0.25f;
+            var p = Game.Player;
+            if (p == null) return;
+            int hp = Game.Safe(() => p.CurrentHealth), max = Game.Safe(() => p.MaxHealth), blk = Game.Safe(() => p.CurrentBlock);
+            bool ko = Game.Safe(() => p.IsDyingOrDead);
+            string key = $"{hp}/{max}/{blk}/{ko}";
+            if (key == _lastSent && Time.unscaledTime % 2f > 0.3f) return;   // pas de doublon, sauf un rappel régulier
+            _lastSent = key;
+            Coop.Send(new Msg { t = T.HeroState, h = hp, sx = max, sy = blk, flag = ko });
         }
 
-        private static GameData.PlayerData PlayerDataOf(PlayerPick pick) =>
-            Game.Manager.ActiveGameData.GetPlayerData((Player.CharacterName)pick.Run.Character);
+        public static void OnRemoteState(Msg m)
+        {
+            if (!_remotes.TryGetValue(m.id, out var r)) _remotes[m.id] = r = new Remote { PlayerId = m.id };
+            r.Hp = (int)m.h; r.MaxHp = m.sx; r.Block = m.sy; r.KO = m.flag; r.LastUpdate = Time.unscaledTime;
+        }
 
-        // ───────────── Apparition en combat et en événement ─────────────
+        // ───────────── Visuels ─────────────
 
         public static void Update()
         {
-            if (!Enabled || !Game.InRun) { DespawnAll(); return; }
-            var host = Game.Player;
-            bool scene = host != null && Game.Safe(() => host.gameObject.activeInHierarchy)
-                         && (Game.State == GameManager.GameState.BattleFloor || Game.State == GameManager.GameState.EventFloor
-                             || Game.State == GameManager.GameState.ShopFloor || Game.State == GameManager.GameState.LootFloor);
-            if (!scene) { DespawnAll(); return; }
+            if (!Coop.Active || !Game.InRun) { DespawnAll(); return; }
+            SendLocalState();
 
-            // Chaque frame : chaque héros garde son décalage par rapport au héros de l'hôte (Enter() le ramènerait sur lui)
-            foreach (var hh in _heroes.Values)
-                if (hh.Entity != null) Game.Safe(() => { hh.Entity.transform.position = host.transform.position + hh.Offset; return 0; });
+            var local = Game.Player;
+            if (!InScene(local)) { DespawnAll(); return; }
+            if (_local == null || _local.Pointer != local.Pointer) { DespawnAll(); _local = local; }
+
+            // Suivi de position et miroir d'animation, à chaque frame
+            int state = 0; float norm = 0;
+            var anim = Game.Safe(() => local.GetComponentInChildren<Animator>());
+            if (anim != null) { var info = anim.GetCurrentAnimatorStateInfo(0); state = info.fullPathHash; norm = info.normalizedTime % 1f; }
+            foreach (var r in _remotes.Values)
+            {
+                if (r.Go == null) continue;
+                r.Go.transform.position = local.transform.position + r.Offset;
+                if (r.Go.activeSelf == r.KO) r.Go.SetActive(!r.KO);
+                if (r.Anim != null && state != 0 && state != r.LastState) { r.LastState = state; try { r.Anim.Play(state, 0, norm); } catch { } }
+            }
 
             if (Time.unscaledTime < _nextCheck) return;
-            _nextCheck = Time.unscaledTime + 0.25f;
-
-            if (_host == null || _host.Pointer != host.Pointer) { DespawnAll(); _host = host; }
-
+            _nextCheck = Time.unscaledTime + 0.5f;
             int k = 1;
-            foreach (var pick in Team.RunPicks.Skip(1))
+            foreach (var pick in Team.RunPicks.Where(p => p.Id != Coop.LocalId))
             {
-                var h = GetOrCreate(pick);
-                if (h.Entity == null) Spawn(h, host, k);
-                else
-                {
-                    // Le Start() du prefab peut recharger les données de la run (celles de l'hôte) : on réimpose les siennes
-                    var data = Game.Safe(() => h.Entity.ActiveData);
-                    if (data == null || data.Pointer != h.Data.Pointer) Game.Safe(() => { h.Entity.LoadEntityData(h.Data); return 0; });
-                    // La barre de vie ne se met pas à jour seule après LoadEntityData (elle affichait 0)
-                    Game.Safe(() => { h.Entity.ForceHealthRefresh(); return 0; });
-                }
+                if (!_remotes.TryGetValue(pick.Id, out var r)) _remotes[pick.Id] = r = new Remote { PlayerId = pick.Id };
+                if (r.Go == null) Spawn(r, pick, local, k);
                 k++;
             }
         }
 
-        private static void Spawn(Hero h, Player host, int index)
+        private static void Spawn(Remote r, PlayerPick pick, Player local, int index)
         {
             try
             {
-                var pd = PlayerDataOf(h.Pick);
-                if (pd.prefab == null) { Coop.AddLog($"Prefab introuvable pour {(Player.CharacterName)h.Pick.Run.Character}"); return; }
+                var pd = Game.Manager.ActiveGameData.GetPlayerData((Player.CharacterName)pick.Run.Character);
+                if (pd.prefab == null) return;
 
-                // Décalage derrière le héros de l'hôte, réduit tant qu'il sortirait du champ de la caméra
-                // (la largeur des sprites n'est pas fiable : un sprite d'effet élargit fortement les bounds)
-                float face = Game.Safe(() => host.FaceDirection);
+                var holder = new GameObject("DIM_RemoteHolder");
+                holder.SetActive(false);   // parent inactif : aucun Awake/OnEnable ne s'exécute sur le clone
+                var go = UnityEngine.Object.Instantiate(pd.prefab, holder.transform);
+                go.name = $"DIM_Remote_{pick.Id}";
+                foreach (var mb in go.GetComponentsInChildren<MonoBehaviour>(true).ToArray().Reverse()) try { UnityEngine.Object.DestroyImmediate(mb); } catch { }
+                foreach (var c in go.GetComponentsInChildren<Canvas>(true).ToArray()) try { if (c != null && c.gameObject != go) UnityEngine.Object.DestroyImmediate(c.gameObject); } catch { }
+                foreach (var col in go.GetComponentsInChildren<Collider2D>(true).ToArray()) try { UnityEngine.Object.DestroyImmediate(col); } catch { }
+
+                r.Anim = go.GetComponentInChildren<Animator>(true);
+                try
+                {
+                    var skin = pd.data.GetSkinData((PlayerSkinData.Name)pick.Run.Skin) ?? pd.data.GetSkinData(pd.data.defaultSkinName);
+                    if (r.Anim != null && skin != null && skin.animatorController != null) r.Anim.runtimeAnimatorController = skin.animatorController;
+                }
+                catch { }
+
+                // Derrière ton héros, décalage réduit tant qu'il sortirait du champ de la caméra
+                float face = Game.Safe(() => local.FaceDirection);
                 if (Math.Abs(face) < 0.01f) face = 1f;
                 float step = 2.2f;
                 var cam = Camera.main;
-                for (int tries = 0; tries < 8 && cam != null; tries++)
+                for (int t = 0; t < 8 && cam != null; t++)
                 {
-                    var vp = cam.WorldToViewportPoint(host.transform.position + new Vector3(-face * step * index, 0, 0));
+                    var vp = cam.WorldToViewportPoint(local.transform.position + new Vector3(-face * step * index, 0, 0));
                     if (vp.x > 0.06f && vp.x < 0.94f) break;
                     step *= 0.75f;
                 }
-                h.Offset = new Vector3(-face * step * index, 0.15f * index, 0.01f * index);
-                var pos = host.transform.position + h.Offset;
+                r.Offset = new Vector3(-face * step * index, 0.15f * index, 0.01f * index);
 
-                var go = UnityEngine.Object.Instantiate(pd.prefab, pos, Quaternion.identity);
-                go.name = $"DIM_Hero_{h.PlayerId}";
-                go.transform.SetParent(host.transform.parent, true);
-                go.transform.localScale = host.transform.localScale;
-
-                var p = go.GetComponent<Player>();
-                if (p == null) { Coop.AddLog("Le prefab du héros n'a pas de composant Player"); UnityEngine.Object.Destroy(go); return; }
-                h.Entity = p;
-                try { p.LoadSkin((PlayerSkinData.Name)h.Pick.Run.Skin); } catch (Exception e) { Coop.AddLog("Skin : " + e.Message); }
-                p.LoadEntityData(h.Data);
-                // Comme pour le héros du jeu : initialisation puis animation d'entrée (sans elle le héros reste invisible)
-                try { p.Init(); } catch (Exception e) { Coop.AddLog("Init du héros : " + e.Message); }
-                try { p.Enter(); } catch (Exception e) { Coop.AddLog("Enter du héros : " + e.Message); }
-                p.LoadEntityData(h.Data);
-                try { p.ForceHealthRefresh(); } catch { }
-
-                var rends = go.GetComponentsInChildren<SpriteRenderer>(true);
-                MultiplayerMod.Instance.Logger.LogInfo($"[diag] Héros {h.PlayerId} : actif={go.activeInHierarchy} pos={go.transform.position} hôte={host.transform.position} " +
-                    $"échelle={go.transform.lossyScale} sprites={rends.Length} visibles={rends.Count(r => r.enabled && r.sprite != null)} parent={go.transform.parent?.name}");
-                Coop.AddLog($"Héros de {Coop.NameOf(h.PlayerId)} en jeu ({h.Data.CurrentHealth}/{h.Data.MaxHealth} PV{(h.KO ? ", K.O." : "")}).");
+                go.transform.SetParent(local.transform.parent, true);
+                go.transform.position = local.transform.position + r.Offset;
+                go.transform.localScale = local.transform.localScale;
+                UnityEngine.Object.Destroy(holder);
+                go.SetActive(true);
+                r.Go = go;
+                Coop.AddLog($"Héros de {Coop.NameOf(pick.Id)} affiché ({(Player.CharacterName)pick.Run.Character}).");
             }
-            catch (Exception e)
-            {
-                Coop.AddLog($"Apparition du héros de {Coop.NameOf(h.PlayerId)} impossible : {e.Message}");
-                MultiplayerMod.Instance.Logger.LogError(e);
-            }
+            catch (Exception e) { Coop.AddLog($"Affichage du héros de {Coop.NameOf(pick.Id)} impossible : {e.Message}"); }
         }
 
         public static void DespawnAll()
         {
-            foreach (var h in _heroes.Values)
-            {
-                if (h.Entity != null) { try { UnityEngine.Object.Destroy(h.Entity.gameObject); } catch { } }
-                h.Entity = null;
-            }
-            _host = null;
+            foreach (var r in _remotes.Values) { if (r.Go != null) try { UnityEngine.Object.Destroy(r.Go); } catch { } r.Go = null; }
+            _local = null;
         }
 
-        // ───────────── Requêtes ─────────────
-
-        public static Hero ByEntity(Entity e)
-        {
-            if (e == null) return null;
-            foreach (var h in _heroes.Values) if (h.Entity != null && h.Entity.Pointer == e.Pointer) return h;
-            return null;
-        }
-
-        public static bool IsExtraHero(Entity e) => ByEntity(e) != null;
-        public static bool IsHostHero(Entity e) => e != null && Game.Player != null && e.Pointer == Game.Player.Pointer;
-
-        /// <summary>Entité du héros d'un joueur : celui de l'hôte (héros du jeu) ou un héros supplémentaire.</summary>
-        public static Player EntityOf(int playerId)
-        {
-            if (Team.RunPicks.Count > 0 && Team.RunPicks[0].Id == playerId) return Game.Player;
-            return _heroes.TryGetValue(playerId, out var h) && !h.KO ? h.Entity : null;
-        }
-
-        // ───────────── Étape 2 : les ennemis frappent tous les héros ─────────────
-
-        /// <summary>Postfix de Player._Damage : un coup d'ennemi au héros de l'hôte est rejoué sur chaque autre héros debout.</summary>
-        public static void OnHostDamaged(Player victim, Hit hit)
-        {
-            if (!Enabled || hit == null || !IsHostHero(victim)) return;
-            var attacker = Game.Safe(() => hit.Attacker);
-            if (attacker == null || attacker.TryCast<Enemy>() == null) return;   // seuls les coups d'ennemis sont partagés
-
-            foreach (var h in _heroes.Values)
-            {
-                if (h.KO || h.Entity == null || h.Entity.IsDyingOrDead) continue;
-                try
-                {
-                    var copy = new Hit(hit.BaseDamage, hit.IsForceKill, attacker, hit.IsRelicBasedDamage, hit.IgnoreBlock);
-                    MEC.Timing.RunCoroutine(h.Entity._Damage(copy));
-                }
-                catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning($"Coup sur le héros de {Coop.NameOf(h.PlayerId)} : {e.Message}"); }
-            }
-        }
-
-        // ───────────── Étape 4 : K.O. ─────────────
-
-        /// <summary>Préfixe de Player.Death. Renvoie false pour un héros supplémentaire : il est mis K.O. au lieu de faire perdre la run.</summary>
-        public static bool OnPlayerDeath(Player p)
-        {
-            var h = ByEntity(p);
-            if (h == null) return true;
-            if (!h.KO)
-            {
-                h.KO = true;
-                Coop.AddLog($"<color=#ff8080>Le héros de {Coop.NameOf(h.PlayerId)} est K.O. !</color>");
-                try { h.Entity.gameObject.SetActive(false); } catch { }
-            }
-            return false;
-        }
-
-        /// <summary>Fin de combat gagné : les héros K.O. reviennent à 1 PV.</summary>
-        public static void OnBattleWon()
-        {
-            foreach (var h in _heroes.Values.Where(x => x.KO))
-            {
-                h.KO = false;
-                h.Data.ChangeCurrentHealth(1);
-                if (h.Entity != null) { try { h.Entity.gameObject.SetActive(true); h.Entity.ForceHealthRefresh(); } catch { } }
-                Coop.AddLog($"Le héros de {Coop.NameOf(h.PlayerId)} se relève avec 1 PV.");
-            }
-        }
-
-        /// <summary>Tous les héros sont tombés ? (le héros de l'hôte compris)</summary>
-        public static bool AllExtraHeroesKO => _heroes.Count > 0 && _heroes.Values.All(h => h.KO);
-
-        // ───────────── Affichage ─────────────
+        // ───────────── Affichage (OnGUI, phase Repaint) ─────────────
 
         public static void DrawLabels()
         {
             var cam = Camera.main;
-            if (cam == null || !Enabled || Team.RunPicks.Count == 0) return;
-            var host = Game.Player;
-            if (host != null) Label(cam, host.transform, Team.RunPicks[0].Id, false);
-            foreach (var h in _heroes.Values)
-                if (h.Entity != null) Label(cam, h.Entity.transform, h.PlayerId, h.KO);
+            if (cam == null || !Coop.Active || _local == null) return;
+            Label(cam, _local.transform, $"<b><color={Coop.ColorOf(Coop.LocalId)}>{Coop.NameOf(Coop.LocalId)}</color></b>");
+            foreach (var r in _remotes.Values)
+            {
+                if (r.Go == null && !r.KO) continue;
+                var t = r.Go != null ? r.Go.transform : _local.transform;
+                string stats = r.KO ? "<color=#ff6060>K.O.</color>" : $"♥ {r.Hp}/{r.MaxHp}" + (r.Block > 0 ? $"  ⛨ {r.Block}" : "");
+                Label(cam, t, $"<b><color={Coop.ColorOf(r.PlayerId)}>{Coop.NameOf(r.PlayerId)}</color></b>  {stats}", r.Go == null ? -30 : 0);
+            }
         }
 
-        private static void Label(Camera cam, Transform t, int playerId, bool ko)
+        private static void Label(Camera cam, Transform t, string text, float dy = 0)
         {
             float hgt = 2f;
             var sr = t.GetComponentInChildren<SpriteRenderer>();
-            if (sr != null) hgt = sr.bounds.size.y;
+            if (sr != null) hgt = Math.Min(4f, sr.bounds.size.y);
             var s = cam.WorldToScreenPoint(t.position + new Vector3(0, hgt * 1.05f, 0));
             if (s.z < 0) return;
-            GUI.Label(new Rect(s.x - 60, Screen.height - s.y - 10, 140, 22),
-                $"<b><color={Coop.ColorOf(playerId)}>{Coop.NameOf(playerId)}</color></b>{(ko ? " <color=#ff6060>K.O.</color>" : "")}");
+            GUI.Label(new Rect(s.x - 80, Screen.height - s.y - 10 + dy, 220, 22), text);
         }
 
-        public static string HashPart() =>
-            string.Join(";", _heroes.Values.OrderBy(h => h.PlayerId).Select(h => $"h{h.PlayerId}={h.Data.CurrentHealth}/{h.Data.MaxHealth}/{h.Data.CurrentBlock}/{(h.KO ? 1 : 0)}"));
+        public static bool AnyRemoteAlive => _remotes.Values.Any(r => !r.KO && Time.unscaledTime - r.LastUpdate < 10f);
     }
 }
