@@ -73,8 +73,13 @@ if ((Test-Path $distLauncher) -and $ver.launcher -eq $LauncherVersion) {
     $launcherExe = $distLauncher
     Write-Host "Launcher v$LauncherVersion inchangé : exe publié conservé."
 } else {
-    try { Copy-Item $launcherExe $distLauncher -Force }
-    catch { throw "Impossible de remplacer dist\DitdCoopLauncher.exe : ferme le launcher puis relance publish.ps1." }
+    # Si le launcher tourne depuis dist/, son exe est verrouillé : on le renomme (Windows l'autorise) avant de copier le nouveau
+    if (Test-Path $distLauncher) {
+        $old = "$distLauncher.old"
+        if (Test-Path $old) { Remove-Item $old -Force -ErrorAction SilentlyContinue }
+        try { Move-Item $distLauncher $old -Force } catch { throw "Impossible de remplacer dist\DitdCoopLauncher.exe : ferme le launcher puis relance publish.ps1." }
+    }
+    Copy-Item $launcherExe $distLauncher -Force
     $launcherExe = $distLauncher
 }
 

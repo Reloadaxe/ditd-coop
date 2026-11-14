@@ -10,3 +10,6 @@ SDK/api/Assembly-CSharp.cs
 
 # BepInEx est téléchargé par le launcher depuis builds.bepinex.dev
 vendor/
+
+# Ancien exe du launcher renommé pendant la publication (verrouillé s'il tourne)
+dist/*.old

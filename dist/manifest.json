@@ -1,12 +1,12 @@
 {
-    "version":  "0.2.3",
-    "changelog":  "Coop : sélection de personnage pour chacun, personnages visibles, écran d\u0027attente, fin de tour corrigée, seed partagée",
+    "version":  "0.2.4",
+    "changelog":  "Launcher : bouton « Lancer 2 fenêtres » pour tester la coop sur un seul PC",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
-                     "version":  "1.0.0",
-                     "sha256":  "599de17e77a74a265aa965071f2f8460379509f93a7c1ea7c886953a8bbe9ad7",
-                     "size":  39424
+                     "version":  "1.0.1",
+                     "sha256":  "a94ec8c85cc54029fca6dcd11faaba4b4a5f1f0e4a12e7038ff663bfce549c92",
+                     "size":  44544
                  },
     "bepinex":  {
                     "version":  "6.0.0-be.793",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "861576820dc4e5081fb59ca1b5fdf0bdb9de4303fbe1d07a9616c4b74cc6929a",
+                      "sha256":  "058c41b1ed20b96824db40c49164b5ffc78beb751adeb8fc2d70fe4631c1caf7",
                       "size":  48128,
-                      "version":  "0.2.3"
+                      "version":  "0.2.4"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "3144947c2a0e48f0d70a00b0390bac230606db0615207397fc4a0b6424f7beae",
                       "size":  13386,
-                      "version":  "0.2.3"
+                      "version":  "0.2.4"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "c5ed3440e47173bd0712c2726f7e3002d0d2f428ae05056d5ace6ca1465ab26f",
+                      "sha256":  "d13e71a12a8682646be86fb0d0ca442fc60237ea98cdcb53f91929fd5bb4be79",
                       "size":  10752,
-                      "version":  "0.2.3",
+                      "version":  "0.2.4",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "f899cf5b002e1f04d80bfcb396fbc5dac3f35ff3ee94134c2b89dcf55b6722a2",
+                      "sha256":  "368f3545cfdac496dba26b6b561db09a607cd4ee6525fcc304f908c5613bbac2",
                       "size":  8704,
-                      "version":  "0.2.3",
+                      "version":  "0.2.4",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "f7d55529e214a2d1ec420c30c7a9df38e08d59e2294a7d16ec0fa1a005a97b4a",
+                      "sha256":  "65e2d61963ef50b35a838a195361412d3ddf423a9f9e96e1c2a53623db52d7d1",
                       "size":  70144,
-                      "version":  "0.2.3"
+                      "version":  "0.2.4"
                   }
               ],
     "remove":  [

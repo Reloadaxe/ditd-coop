@@ -21,6 +21,7 @@ namespace DitdLauncher
         private readonly FlowLayoutPanel _options = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true };
         private readonly CheckBox _autoUpdate = new CheckBox { Text = "Mettre à jour automatiquement avant de jouer", AutoSize = true };
         private readonly Button _play = new Button { Text = "▶  JOUER", Height = 44, Dock = DockStyle.Fill, Font = new Font("Segoe UI", 12f, FontStyle.Bold) };
+        private readonly Button _playTwo = new Button { Text = "Lancer 2 fenêtres (test coop)", AutoSize = true };
         private readonly Button _install = new Button { Text = "Installer / Mettre à jour", AutoSize = true };
         private readonly Button _check = new Button { Text = "Vérifier", AutoSize = true };
         private readonly Button _disable = new Button { Text = "Désactiver les mods", AutoSize = true };
@@ -56,7 +57,7 @@ namespace DitdLauncher
             root.Controls.Add(_play);
 
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true };
-            buttons.Controls.AddRange(new Control[] { _install, _check, _disable, _openDir, _openLogs });
+            buttons.Controls.AddRange(new Control[] { _playTwo, _install, _check, _disable, _openDir, _openLogs });
             root.Controls.Add(buttons);
             root.Controls.Add(_progress);
             root.RowStyles.Clear();
@@ -77,6 +78,7 @@ namespace DitdLauncher
             _browse.Click += (s, e) => Browse();
             _autoUpdate.CheckedChanged += (s, e) => SaveSettings();
             _play.Click += async (s, e) => await Run(PlayAsync);
+            _playTwo.Click += async (s, e) => await Run(PlayTwoAsync);
             _install.Click += async (s, e) => await Run(InstallAsync);
             _check.Click += async (s, e) => await Run(CheckAsync);
             _disable.Click += (s, e) => { if (ValidDir()) { _updater.DisableMods(GameDir); RefreshStatus(); } };
@@ -159,6 +161,29 @@ namespace DitdLauncher
             UI(RefreshStatus);
         }
 
+        private async Task PlayTwoAsync()
+        {
+            if (!ValidDir()) return;
+            if (Updater.IsGameRunning()) { Log("Ferme d'abord les instances du jeu déjà ouvertes."); return; }
+            await UpdateBeforeLaunchAsync();
+            await _updater.LaunchWindowedAsync(GameDir, 2);
+            UI(RefreshStatus);
+        }
+
+        private async Task UpdateBeforeLaunchAsync()
+        {
+            if (!_settings.AutoUpdate && Updater.BepInExInstalled(GameDir)) return;
+            try
+            {
+                if (_manifest == null) await CheckAsync();
+                await _updater.InstallAsync(_manifest, GameDir, _settings.Optional);
+            }
+            catch (Exception e) when (Updater.BepInExInstalled(GameDir))
+            {
+                Log("Mise à jour impossible (" + e.Message + "), lancement avec la version installée.");
+            }
+        }
+
         private async Task Run(Func<Task> action)
         {
             if (_busy) return;
@@ -235,7 +260,7 @@ namespace DitdLauncher
 
         private void SetEnabled(bool on)
         {
-            foreach (var c in new Control[] { _play, _install, _check, _disable, _browse, _gameDir }) c.Enabled = on;
+            foreach (var c in new Control[] { _play, _playTwo, _install, _check, _disable, _browse, _gameDir }) c.Enabled = on;
         }
 
         private void Log(string s) => UI(() => _log.AppendText($"[{DateTime.Now:HH:mm:ss}] {s}{Environment.NewLine}"));

@@ -169,6 +169,57 @@ namespace DitdLauncher
                 : "Jeu lancé. PREMIER LANCEMENT : BepInEx prépare le jeu (1 à 3 minutes, l'écran peut rester noir), ne ferme pas la fenêtre.");
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+
+        /// <summary>
+        /// Lance plusieurs instances fenêtrées, côte à côte (test de la coop sur un seul PC).
+        /// Les fenêtres se partagent la largeur de la zone de travail de l'écran principal, en 16:9.
+        /// </summary>
+        public async Task LaunchWindowedAsync(string gameDir, int count)
+        {
+            var area = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea;
+            int w = area.Width / count;
+            int h = Math.Min(area.Height, w * 9 / 16);
+            // Taille du rendu un peu inférieure à la fenêtre (bordure et barre de titre)
+            int cw = w - 16, ch = h - 39;
+            var procs = new List<Process>();
+            for (int i = 0; i < count; i++)
+            {
+                var psi = new ProcessStartInfo(Path.Combine(gameDir, GameExe),
+                    $"-screen-fullscreen 0 -window-mode windowed -screen-width {cw} -screen-height {ch}")
+                { WorkingDirectory = gameDir, UseShellExecute = false };
+                procs.Add(Process.Start(psi));
+                L($"Instance {i + 1}/{count} lancée (PID {procs[i].Id}).");
+                await Task.Delay(1500).ConfigureAwait(false);
+            }
+
+            // Placement des fenêtres dès qu'elles apparaissent
+            var placed = new HashSet<int>();
+            for (int t = 0; t < 60 && placed.Count < count; t++)
+            {
+                for (int i = 0; i < procs.Count; i++)
+                {
+                    if (placed.Contains(i)) continue;
+                    try
+                    {
+                        procs[i].Refresh();
+                        var hwnd = procs[i].MainWindowHandle;
+                        if (hwnd == IntPtr.Zero) continue;
+                        SetWindowPos(hwnd, IntPtr.Zero, area.Left + i * w, area.Top, w, h, 0x0040 /* SWP_SHOWWINDOW */);
+                        placed.Add(i);
+                    }
+                    catch { placed.Add(i); }
+                }
+                await Task.Delay(500).ConfigureAwait(false);
+            }
+            L(placed.Count == count
+                ? $"{count} fenêtres placées côte à côte. Fenêtre de gauche : F2 > Créer la partie ; à droite : F2 > Rejoindre 127.0.0.1."
+                : "Certaines fenêtres n'ont pas pu être placées (le jeu met peut-être du temps à démarrer).");
+            if (!InteropGenerated(gameDir))
+                L("PREMIER LANCEMENT : BepInEx prépare le jeu dans chaque instance, patiente 1 à 3 minutes.");
+        }
+
         public static bool IsGameRunning() => Process.GetProcessesByName(Path.GetFileNameWithoutExtension(GameExe)).Length > 0;
 
         // ───────────── Auto-mise à jour du launcher ─────────────
