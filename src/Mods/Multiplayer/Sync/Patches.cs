@@ -122,6 +122,10 @@ namespace DiceMultiplayer.Sync
             P(h, typeof(GameManager), nameof(GameManager.LoadRun), nameof(LoadRunPrefix));
             P(h, typeof(SeedSystem), nameof(SeedSystem.StartRun), nameof(SeedStartRunPostfix), postfix: true);
 
+            // Plusieurs fenêtres sur le même PC (-ditd-player autre que J1) : fichier de sauvegarde propre à l'instance,
+            // sinon les deux jeux écrivent le même fichier en même temps (échec de sauvegarde, chargement de salle bloqué)
+            if (LocalInstanceSuffix != null) P(h, typeof(SaveDataManager), "GetSaveFileName", nameof(SaveFilePostfix), postfix: true);
+
             // Pas de tutoriel en coop (il bloquerait la partie d'un seul joueur)
             // (get_AreTutorialsActive est exclu : sa fonction native est partagée avec 7 autres getters du jeu)
             foreach (var g in new[] { "get_ShouldShowIntroFirstBattleTutorial", "get_ShouldShowMapTutorial", "get_ShouldShowEnemyModifierTutorial",
@@ -203,6 +207,35 @@ namespace DiceMultiplayer.Sync
         {
             try { return Coop.OnArrowClick(__instance); }
             catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("ArrowClickPrefix : " + e.Message); return true; }
+        }
+
+        /// <summary>Suffixe de sauvegarde de cette instance (-ditd-player J2, J3…), null pour J1 ou une partie normale.</summary>
+        private static readonly string LocalInstanceSuffix = InstanceSuffix();
+
+        private static string InstanceSuffix()
+        {
+            var a = Environment.GetCommandLineArgs();
+            int i = Array.FindIndex(a, x => string.Equals(x, "-ditd-player", StringComparison.OrdinalIgnoreCase));
+            if (i < 0 || i + 1 >= a.Length) return null;
+            var name = new string(a[i + 1].Where(char.IsLetterOrDigit).ToArray());
+            return string.IsNullOrEmpty(name) || name.Equals("J1", StringComparison.OrdinalIgnoreCase) ? null : name;
+        }
+
+        /// <summary>Fichier de sauvegarde propre à l'instance, créé à partir de celui du joueur s'il n'existe pas encore.</summary>
+        private static void SaveFilePostfix(ref string __result)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(__result) || LocalInstanceSuffix == null) return;
+                var original = __result;
+                var mine = Path.GetFileNameWithoutExtension(original) + "_" + LocalInstanceSuffix + Path.GetExtension(original);
+                var dir = UnityEngine.Application.persistentDataPath;
+                var src = Path.Combine(dir, original);
+                var dst = Path.Combine(dir, mine);
+                if (!File.Exists(dst) && File.Exists(src)) File.Copy(src, dst);
+                __result = mine;
+            }
+            catch { }
         }
 
         private static void MoveForwardPrefix(Map.MoveData __0)

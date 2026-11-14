@@ -370,6 +370,17 @@ namespace DiceMultiplayer.Sync
         /// <summary>Vrai tant qu'un vote local peut être émis ou changé (départ bloqué en attente, ou vote déjà émis).</summary>
         private static bool VotingOpen => _awaitingChoice || _myVotePending;
 
+        /// <summary>Test automatique : vote pour la plus petite case possible, si un vote est attendu et pas encore émis.</summary>
+        public static string AutoVote()
+        {
+            if (!Active || !VotingOpen || _myVotePending) return null;
+            var opts = _currentOptions.Count > 0 ? _currentOptions : ClickableOptions(Game.Map, out _);
+            if (opts.Count == 0) return null;
+            var c = opts.OrderBy(o => o.x).ThenBy(o => o.y).First();
+            CastVote(c);
+            return $"{c.x},{c.y}";
+        }
+
         private static void CastVote(Vector2Int c, bool auto = false)
         {
             bool change = _myVotePending;
