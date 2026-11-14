@@ -60,7 +60,113 @@ namespace DiceMultiplayer.Sync
             finally { ApplyingRemote = false; }
         }
 
+        // ───── Statuts des ennemis (poison, faiblesse…) ─────
+
+        /// <summary>Phases où ce sont MES dés (ou mes runes) qui agissent : un statut posé alors vient de moi.</summary>
+        private static bool PlayerPhase()
+        {
+            var st = Game.TurnState;
+            return st == BattleSystem.TurnState.SelectDice || st == BattleSystem.TurnState.PerformFlashDice
+                || st == BattleSystem.TurnState.UseRunestones || st == BattleSystem.TurnState.PreExecuteDice
+                || st == BattleSystem.TurnState.ExecuteDice;
+        }
+
+        /// <summary>
+        /// Préfixe de Entity.AddModifier. Un statut posé sur un ennemi pendant mes phases de dés est partagé. Les statuts que
+        /// les ennemis se donnent eux-mêmes arrivent pendant leurs phases et existent déjà chez tous (même seed).
+        /// Les effets périodiques (dégâts du poison, baisse des tours) tournent ensuite nativement chez chacun ; les dégâts
+        /// du poison n'ont pas d'attaquant et ne sont donc pas renvoyés. L'hôte corrige les écarts à chaque tour.
+        /// </summary>
+        public static void OnModifierAdded(Entity target, ModifierData md)
+        {
+            if (!Coop.Active || ApplyingRemote || target == null || md == null || !Game.InBattle) return;
+            var enemy = target.TryCast<Enemy>();
+            if (enemy == null || enemy.isDummy || md.isPreview || !PlayerPhase()) return;
+            int idx; try { idx = Game.Battle.GetBattleIndexOfEntity(enemy); } catch { return; }
+            if (idx < 0) return;
+            Coop.Send(new Msg { t = T.EnemyMod, uid = idx, btn = (int)md.type, sx = md.value, sy = md.multiplier, flag = md.haveTurnLimit });
+        }
+
+        public static void OnRemoteModifier(Msg m)
+        {
+            if (!Game.InBattle) return;
+            var e = Game.Safe(() => Game.Battle.GetEntityWithBattleIndex(m.uid, Entity.Side.Enemy));
+            if (e == null || e.IsDyingOrDead) return;
+            ApplyingRemote = true;
+            try
+            {
+                var md = ModifierExt.GetModifierData((ModifierData.Modifier)m.btn, e, m.sx);
+                if (md == null) return;
+                if (m.sy != 0) md.multiplier = m.sy;
+                md.haveTurnLimit = m.flag;
+                e.AddModifier(md);
+                e.RefreshModifierVisuals();
+                if (_logged++ < 10) Coop.AddLog($"[sync] {Coop.NameOf(m.id)} pose {(ModifierData.Modifier)m.btn} {m.sx} sur l'ennemi {m.uid}.");
+            }
+            catch (Exception ex) { MultiplayerMod.Instance.Logger.LogWarning("Statut distant : " + ex.Message); }
+            finally { ApplyingRemote = false; }
+        }
+
+        private static string ModsOf(Enemy e)
+        {
+            var parts = new List<string>();
+            try
+            {
+                foreach (var md in e.modifiers)
+                    if (md != null && !md.isPreview) parts.Add($"{(int)md.type}={md.value}");
+            }
+            catch { }
+            return string.Join(",", parts);
+        }
+
+        /// <summary>Aligne les statuts de mon ennemi sur ceux de l'hôte (ajout, valeur, retrait).</summary>
+        private static int FixModifiers(Enemy e, string hostMods)
+        {
+            var want = new Dictionary<int, int>();
+            foreach (var p in (hostMods ?? "").Split(','))
+            {
+                var kv = p.Split('=');
+                if (kv.Length == 2 && int.TryParse(kv[0], out var t) && int.TryParse(kv[1], out var v)) want[t] = v;
+            }
+            int fixes = 0;
+            ApplyingRemote = true;
+            try
+            {
+                var have = new Dictionary<int, ModifierData>();
+                foreach (var md in e.modifiers) if (md != null && !md.isPreview && !have.ContainsKey((int)md.type)) have[(int)md.type] = md;
+                foreach (var kv in want)
+                {
+                    if (have.TryGetValue(kv.Key, out var md))
+                    {
+                        if (md.value != kv.Value) { md.value = kv.Value; fixes++; }
+                    }
+                    else
+                    {
+                        var nmd = ModifierExt.GetModifierData((ModifierData.Modifier)kv.Key, e, kv.Value);
+                        if (nmd != null) { e.AddModifier(nmd); fixes++; }
+                    }
+                }
+                foreach (var kv in have)
+                    if (!want.ContainsKey(kv.Key)) { e.RemoveModifier(kv.Value); fixes++; }
+                if (fixes > 0) e.RefreshModifierVisuals();
+            }
+            catch (Exception ex) { MultiplayerMod.Instance.Logger.LogDebug("Correction statuts : " + ex.Message); }
+            finally { ApplyingRemote = false; }
+            return fixes;
+        }
+
         // ───── Correction par l'hôte ─────
+
+        private static string _lastSyncKey;
+
+        /// <summary>Une fois par tour, en phase de choix des dés (effets de début de tour terminés).</summary>
+        public static void HostBroadcastOncePerTurn()
+        {
+            var key = $"{Game.Battle?.Pointer}:{Game.Turn}";
+            if (key == _lastSyncKey) return;
+            _lastSyncKey = key;
+            HostBroadcastEnemies();
+        }
 
         public static void HostBroadcastEnemies()
         {
@@ -69,7 +175,7 @@ namespace DiceMultiplayer.Sync
             foreach (var e in AllEnemies())
             {
                 int idx = Game.Safe(() => Game.Battle.GetBattleIndexOfEntity(e));
-                parts.Add($"{idx}:{(e.IsDyingOrDead ? -1 : e.CurrentHealth)}:{e.CurrentBlock}");
+                parts.Add($"{idx}:{(e.IsDyingOrDead ? -1 : e.CurrentHealth)}:{e.CurrentBlock}:{ModsOf(e)}");
             }
             Coop.Send(new Msg { t = T.EnemySync, text = string.Join(";", parts), turn = Game.Turn });
         }
@@ -95,6 +201,7 @@ namespace DiceMultiplayer.Sync
                     }
                     if (e.CurrentHealth != hp) { e.ChangeCurrentHealth(hp); e.ForceHealthRefresh(); fixedCount++; }
                     if (e.CurrentBlock != blk) { e.ChangeBlockValue(blk); fixedCount++; }
+                    if (f.Length >= 4) fixedCount += FixModifiers(e.Cast<Enemy>(), f[3]);
                 }
                 catch { }
             }

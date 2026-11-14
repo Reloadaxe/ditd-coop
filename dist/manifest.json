@@ -1,6 +1,6 @@
 {
-    "version":  "0.7.1",
-    "changelog":  "Les dés des autres joueurs sont verrouillés (plus de déplacement ni de duplication)",
+    "version":  "0.8.0",
+    "changelog":  "Statuts des ennemis (poison, faiblesse, etc.) synchronisés entre joueurs",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "bd3b5a5941b2619edd4b971ae05d7766858b2e799e42c964dd55996a4fc420e1",
+                      "sha256":  "f4e211d083cf021a656f60fd49dcb4a2daa65a2da5a4e555bceb8db0e3eca59e",
                       "size":  50176,
-                      "version":  "0.7.1"
+                      "version":  "0.8.0"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.7.1"
+                      "version":  "0.8.0"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "b8b66316c352a11d3e9610b931a8d0870c39cccca3494fb44ddd4bdb34565cb1",
+                      "sha256":  "d7f9cd542a15d5b50ee8c21472609579a21a1478b29dd8a4adfe55c6bfda0dd8",
                       "size":  10752,
-                      "version":  "0.7.1",
+                      "version":  "0.8.0",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "876adee7151463ee88934eb41ae040686bf543a84435a8c6a772fcd2ca22d5a9",
+                      "sha256":  "2fa49c157239f90f49b88500ba3fe3e13659c440e59f29dd39ad28746fbdf639",
                       "size":  8704,
-                      "version":  "0.7.1",
+                      "version":  "0.8.0",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "62e58110157bb6fd3a6921f093518f04f8a411e7f6b21d4c0a976c07d3d23b09",
-                      "size":  121344,
-                      "version":  "0.7.1"
+                      "sha256":  "a7c31da0b4d4925aeb002df63e07e3d14a83285c4d06c49d59e870fc12e6e195",
+                      "size":  124416,
+                      "version":  "0.8.0"
                   }
               ],
     "remove":  [

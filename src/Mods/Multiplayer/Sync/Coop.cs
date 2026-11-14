@@ -146,6 +146,7 @@ namespace DiceMultiplayer.Sync
                     case T.BoardClear: Board.OnRemoteClear(m); break;
                     case T.EnemyDamage: Combat.OnRemoteDamage(m); break;
                     case T.EnemySync: Combat.OnEnemySync(m); break;
+                    case T.EnemyMod: Combat.OnRemoteModifier(m); break;
                     case T.Preview: Preview.OnRemote(m); break;
                     case T.OnMap: if (m.flag) _onMap.Add(m.id); else _onMap.Remove(m.id); TryResolveVote(); break;
                     case T.Vote: OnVote(m); break;

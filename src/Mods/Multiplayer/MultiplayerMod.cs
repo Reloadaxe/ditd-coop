@@ -12,7 +12,7 @@ namespace DiceMultiplayer
     /// Mod multijoueur coop (2 ou 3 joueurs) en TCP direct.
     /// Tout le monde joue la mÃªme run, synchronisÃ©e en lockstep sur les entrÃ©es. Voir Sync/Coop.cs.
     /// </summary>
-    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.7.1",
+    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.8.0",
         Author = "DiceModding", Description = "Coop Ã  2 ou 3 : chacun sa run et son hÃ©ros, ennemis et plateau partagÃ©s (TCP).")]
     public class MultiplayerMod : DiceMod
     {
@@ -93,7 +93,7 @@ namespace DiceMultiplayer
             // Fin de mon tour : mes dÃ©s quittent le plateau chez les autres
             if (state == BattleSystem.TurnState.EndTurn) Board.OnLocalTurnEnd();
             // DÃ©but de tour : l'hÃ´te envoie les PV de rÃ©fÃ©rence des ennemis (une fois les coups du tour prÃ©cÃ©dent arrivÃ©s)
-            if (state == BattleSystem.TurnState.StartTurn && Coop.IsHost) Game.Schedule(Combat.HostBroadcastEnemies, 0.8f);
+            if (state == BattleSystem.TurnState.SelectDice && Coop.IsHost) Game.Schedule(Combat.HostBroadcastOncePerTurn, 0.5f);
         }
 
         public override void OnBattleEnd(BattleSystem battle, BattleSystem.EndState result)

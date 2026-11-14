@@ -91,6 +91,8 @@ namespace DiceMultiplayer.Sync
 
             // 4) Ennemis partagés : mes dégâts sont envoyés aux autres
             P(h, typeof(Enemy), "_Damage", nameof(EnemyDamagePostfix), postfix: true);
+            // Statuts posés sur les ennemis (poison, faiblesse…) : partagés
+            P(h, typeof(Entity), nameof(Entity.AddModifier), nameof(AddModifierPrefix));
 
             // Carte : le choix de case est un vote (toutes les entrées passent par Map.ClickOnMapTile)
             P(h, typeof(Map), nameof(Map.ClickOnMapTile), nameof(MapTileClickPrefix));
@@ -300,6 +302,12 @@ namespace DiceMultiplayer.Sync
         {
             try { Combat.OnEnemyDamaged(__instance, __0); }
             catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("EnemyDamagePostfix : " + e.Message); }
+        }
+
+        private static void AddModifierPrefix(Entity __instance, ModifierData __0)
+        {
+            try { Combat.OnModifierAdded(__instance, __0); }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogDebug("AddModifierPrefix : " + e.Message); }
         }
 
         // ───── Run ─────
