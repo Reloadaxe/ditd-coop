@@ -170,6 +170,7 @@ namespace DiceMultiplayer.Sync
             Send(new Msg { t = T.StartRun, run = team, seed = seed, picks = Team.RunPicks });
             _floorCounter = 0;
             Team.OnHostTeamRunStarted();
+            Heroes.OnTeamRunStarted();
             Lobby.OnRunStarted();
             AddLog($"Run d'équipe lancée pour tous (seed {seed}) : " +
                    string.Join(", ", Team.RunPicks.Select(p => $"{NameOf(p.Id)} = {(Player.CharacterName)p.Run.Character}")));
@@ -189,6 +190,7 @@ namespace DiceMultiplayer.Sync
         {
             if (m.run == null) return;
             Team.OnTeamRunReceived(m);
+            Heroes.OnTeamRunStarted();
             Lobby.OnRunStarted();
             PendingSeed = m.seed;
             _floorCounter = 0;

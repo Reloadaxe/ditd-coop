@@ -84,6 +84,11 @@ namespace DiceMultiplayer.Sync
             P(h, typeof(SeedSystem), nameof(SeedSystem.StartRun), nameof(SeedStartRunPostfix), postfix: true);
             P(h, typeof(ActiveDeck), nameof(ActiveDeck.AddDice), nameof(DeckAddDicePostfix), postfix: true);
 
+            // 6) Héros multiples : propriétaire des dés, coups ennemis rejoués sur chaque héros, K.O.
+            P(h, typeof(GameObjectDice), nameof(GameObjectDice.Init), nameof(DiceInitPrefix));
+            P(h, typeof(Player), "_Damage", nameof(PlayerDamagePostfix), postfix: true);
+            P(h, typeof(Player), nameof(Player.Death), nameof(PlayerDeathPrefix));
+
             // Diagnostic : qui remet la run à zéro ?
             foreach (var m in new[] { nameof(RunInfo.Reset), nameof(RunInfo.ExitRun), nameof(RunInfo.EndUnfinishedRun), nameof(RunInfo.EndRun) })
                 P(h, typeof(RunInfo), m, nameof(RunResetTrace));
@@ -155,9 +160,20 @@ namespace DiceMultiplayer.Sync
         private static void ClickPostfix() => Coop.EndLocalClick();
 
         // ───── Dés ─────
-        private static void PlaceDicePrefix(BoardSlot __0, GameObjectDice __1, BattleBoard.PlaceDiceContext __3)
+        private static void PlaceDicePrefix(BoardSlot __0, GameObjectDice __1, ref Entity __2, BattleBoard.PlaceDiceContext __3)
         {
-            if (__3 == BattleBoard.PlaceDiceContext.Player) Coop.OnLocalPlaceDice(__0, __1);
+            if (__3 != BattleBoard.PlaceDiceContext.Player) return;
+            Coop.OnLocalPlaceDice(__0, __1);
+            // Le héros qui pose le dé est celui de son propriétaire
+            try
+            {
+                if (Heroes.Enabled && __1 != null && Heroes.IsHostHero(__2))
+                {
+                    var owner = Heroes.EntityOf(Coop.OwnerOfDice(__1.CurrentActiveDice.uid));
+                    if (owner != null) __2 = owner;
+                }
+            }
+            catch { }
         }
 
         private static void ReturnDicePrefix(GameObjectDice __0) => Coop.OnLocalReturnDice(__0);
@@ -180,6 +196,26 @@ namespace DiceMultiplayer.Sync
         private static bool StartRunPrefix(RunInfo.NewRunData __0, ActiveCustomRun __1) => Team.OnLocalStartRun(__0, __1);
 
         private static void DeckAddDicePostfix(ActiveDice __0) => Team.OnDiceAddedToDeck(__0);
+
+        /// <summary>Un dé tiré pour le héros de l'hôte mais appartenant à un autre joueur reçoit le héros de ce joueur comme propriétaire.</summary>
+        private static void DiceInitPrefix(ActiveDice __0, ref Entity __2)
+        {
+            try
+            {
+                if (!Heroes.Enabled || __0 == null || !Heroes.IsHostHero(__2)) return;
+                var owner = Heroes.EntityOf(Coop.OwnerOfDice(__0.uid));
+                if (owner != null && !Heroes.IsHostHero(owner)) __2 = owner;
+            }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("DiceInitPrefix : " + e.Message); }
+        }
+
+        private static void PlayerDamagePostfix(Player __instance, Hit __0)
+        {
+            try { Heroes.OnHostDamaged(__instance, __0); }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("PlayerDamagePostfix : " + e.Message); }
+        }
+
+        private static bool PlayerDeathPrefix(Player __instance) => Heroes.OnPlayerDeath(__instance);
 
         private static void RunResetTrace(System.Reflection.MethodBase __originalMethod)
         {

@@ -28,6 +28,7 @@ namespace DiceMultiplayer.Sync
                     sb.Append(";hand=").Append(string.Join(",", hand.Select(d => Game.Safe(() => d.CurrentActiveDice.uid + ":" + d.CurrentActiveDice.CurrentFaceValue)).OrderBy(x => x)));
             }
 
+            sb.Append(";").Append(Heroes.HashPart());
             var s = sb.ToString();
             return (Fnv(s), s);
         }
