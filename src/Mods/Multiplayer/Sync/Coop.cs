@@ -237,7 +237,7 @@ namespace DiceMultiplayer.Sync
                         if (VotingOpen)
                         {
                             var h = HoveredCoord(Game.Map);
-                            if (h != null) CastVote(h.Value);
+                            if (h != null && IsOption(h.Value)) CastVote(h.Value);
                         }
                     }
                 }
@@ -266,7 +266,7 @@ namespace DiceMultiplayer.Sync
             _lastClicked = coord;
             _lastMapClickTime = Time.unscaledTime;
             // Départ déjà bloqué faute de choix : ce clic est le vote
-            if (VotingOpen) { CastVote(coord); return false; }   // départ bloqué ou vote en cours : ce clic est (ou change) mon vote
+            if (VotingOpen && IsOption(coord)) { CastVote(coord); return false; }   // départ bloqué ou vote en cours : ce clic est (ou change) mon vote
             return true;
         }
 
@@ -293,7 +293,12 @@ namespace DiceMultiplayer.Sync
 
             // Plusieurs chemins : on bloque, chez tout le monde, jusqu'au vote. La case survolée ne compte que si l'on vient
             // de cliquer sur la carte (sinon c'est un survol ancien, pas un choix).
-            var target = clicked ?? desired ?? (recentMapClick ? hovered : null);
+            _currentOptions = options;
+            // Seule une case réellement accessible compte : un survol périmé (ex. clic sur « Continuer » en fin de salle)
+            // ne doit pas devenir un vote — sinon « partir » vers la case actuelle relance la même salle
+            Vector2Int? target = null;
+            foreach (var cand in new[] { clicked, desired, recentMapClick ? hovered : null })
+                if (cand != null && IsOption(cand.Value)) { target = cand; break; }
             if (target == null)
             {
                 _awaitingChoice = true;
@@ -308,6 +313,11 @@ namespace DiceMultiplayer.Sync
         private static bool _awaitingChoice;
         private static float _lastMapClickTime = -10f;
         private static readonly HashSet<string> MapClickTypes = new HashSet<string> { "VisualMapTile", "MapTileArrow", "HoverEvents" };
+
+        /// <summary>Cases accessibles au moment où le départ a été bloqué (le vote ne peut porter que sur elles).</summary>
+        private static List<Vector2Int> _currentOptions = new List<Vector2Int>();
+
+        private static bool IsOption(Vector2Int c) => _currentOptions.Count == 0 || _currentOptions.Contains(c);
 
         /// <summary>J'ai voté et le vote n'est pas encore résolu : mes clics sur la carte changent mon vote.</summary>
         private static bool _myVotePending;
@@ -394,6 +404,14 @@ namespace DiceMultiplayer.Sync
         {
             ResolveAt = -1f;
             if (!Active || !IsHost || Votes.Count == 0 || Net.Players.Any(p => !Votes.ContainsKey(p.Id))) return;
+            // Votes pour une case non accessible (survol périmé chez un joueur) : écartés, on attend un vrai choix
+            var invalid = Votes.Values.Where(v => string.IsNullOrEmpty(v.path) && !IsOption(new Vector2Int(v.sx, v.sy))).Select(v => v.id).ToList();
+            if (invalid.Count > 0)
+            {
+                foreach (var id in invalid) Votes.Remove(id);
+                AddLog($"[vote] Vote(s) pour une case non accessible écarté(s) : {string.Join(", ", invalid.Select(NameOf))}.");
+                return;
+            }
 
             // Majorité ; en cas d'égalité, le choix de l'hôte s'il en fait partie, sinon celui du plus petit id
             var groups = Votes.Values.GroupBy(Key).ToList();
@@ -429,6 +447,10 @@ namespace DiceMultiplayer.Sync
                 WithReplay(() => arrow.OnPointerClick(ped));
                 return;
             }
+            // Jamais de « départ » vers la case où l'on est déjà : cela relancerait la même salle
+            var here = Game.Safe(() => Game.Map?.CurrentPlayerTile != null ? Game.Map.CurrentPlayerTile.ActiveTile.CoordVector : new Vector2Int(-999, -999));
+            if (here.x == m.sx && here.y == m.sy) { AddLog($"[vote] Case {m.sx},{m.sy} = case actuelle : départ ignoré."); _awaitingChoice = true; return; }
+            _currentOptions = new List<Vector2Int>();
             var tile = FindTile(m.sx, m.sy);
             var map = Game.Map;
             if (tile == null || map == null) { AddLog($"[vote] Case {m.sx},{m.sy} introuvable sur ta carte."); return; }
