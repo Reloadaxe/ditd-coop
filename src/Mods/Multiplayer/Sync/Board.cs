@@ -46,6 +46,7 @@ namespace DiceMultiplayer.Sync
         {
             foreach (var g in _ghosts) Destroy(g);
             _ghosts.Clear();
+            ClearDrags();
         }
 
         public static bool IsTakenByOther(int x, int y) => _ghosts.Any(g => g.X == x && g.Y == y && !g.Stale);
@@ -185,6 +186,12 @@ namespace DiceMultiplayer.Sync
 
         public static void OnRemotePlace(Msg m)
         {
+            DestroyDrag(m.id);   // le dé tenu vient d'être posé
+            OnRemotePlaceInner(m);
+        }
+
+        private static void OnRemotePlaceInner(Msg m)
+        {
             foreach (var old in _ghosts.Where(g => g.PlayerId == m.id && g.Uid == m.uid)) Destroy(old);
             _ghosts.RemoveAll(g => g.PlayerId == m.id && g.Uid == m.uid);
             _ghosts.Add(new Ghost { PlayerId = m.id, Uid = m.uid, X = m.sx, Y = m.sy, Name = m.text, Value = m.btn, Vis = m.vis, Data = m.path, Face = (int)m.h, Extra = m.comp });
@@ -196,6 +203,7 @@ namespace DiceMultiplayer.Sync
             foreach (var g in _ghosts.Where(g => g.PlayerId == id)) Destroy(g);
             _ghosts.RemoveAll(g => g.PlayerId == id);
             _remoteVals.Remove(id);
+            DestroyDrag(id);
         }
 
         public static void OnRemoteRemove(Msg m)
@@ -456,6 +464,87 @@ namespace DiceMultiplayer.Sync
                 if (xy.Length == 2 && int.TryParse(xy[0], out var x) && int.TryParse(xy[1], out var y) && int.TryParse(kv[1], out var v)) d[(x, y)] = v;
             }
             _remoteVals[m.id] = d;
+        }
+
+        // ───────────── Dé tenu en main (déplacement en direct) ─────────────
+        //
+        // Quand je prends un dé (DiceManager.SelectedDice), j'envoie son apparence ; chez les autres, une image du dé suit
+        // mon curseur (déjà transmis 30 fois par seconde et lissé) jusqu'à ce que je le lâche ou le pose.
+
+        private static int _heldKey;
+        private static readonly Dictionary<int, GameObject> _drags = new Dictionary<int, GameObject>();
+        private static readonly Dictionary<int, Vector2> _dragPos = new Dictionary<int, Vector2>();
+
+        public static void UpdateDrag()
+        {
+            if (!Coop.Active) return;
+            // Moi : début / fin de prise d'un dé
+            GameObjectDice held = null;
+            if (Game.InBattle)
+            {
+                var dm = Game.Dice;
+                held = dm != null ? Game.Safe(() => dm.SelectedDice) : null;
+                if (held != null && IsGhostDice(held)) held = null;
+            }
+            int key = held != null ? Key(held) : 0;
+            if (key != _heldKey)
+            {
+                if (_heldKey != 0) Coop.Send(new Msg { t = T.DragEnd, uid = _heldKey });
+                _heldKey = key;
+                if (held != null) Coop.Send(new Msg { t = T.DragStart, uid = key, vis = Game.Safe(() => Snapshot(held)) });
+            }
+
+            // Les autres : leur dé suit leur curseur
+            if (_drags.Count == 0) return;
+            if (!Game.InBattle) { ClearDrags(); return; }
+            foreach (var kv in _drags)
+            {
+                var go = kv.Value;
+                if (go == null || !Coop.Cursors.TryGetValue(kv.Key, out var cur)) continue;
+                var target = new Vector2(cur.x * Screen.width, cur.y * Screen.height);
+                if (!_dragPos.TryGetValue(kv.Key, out var shown) || (shown - target).sqrMagnitude > 400f * 400f) shown = target;
+                shown = Vector2.Lerp(shown, target, 1f - Mathf.Exp(-18f * Time.unscaledDeltaTime));
+                _dragPos[kv.Key] = shown;
+                var rt = go.transform as RectTransform;
+                var parent = go.transform.parent as RectTransform;
+                var canvas = go.GetComponentInParent<Canvas>();
+                var cam = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.worldCamera : null;
+                if (parent != null && RectTransformUtility.ScreenPointToWorldPointInRectangle(parent, shown, cam, out var world))
+                    go.transform.position = world;
+                go.transform.SetAsLastSibling();
+            }
+        }
+
+        public static void OnRemoteDragStart(Msg m)
+        {
+            DestroyDrag(m.id);
+            if (!Game.InBattle || string.IsNullOrEmpty(m.vis)) return;
+            var slot = UnityEngine.Object.FindObjectsOfType<BoardSlot>().FirstOrDefault(s => s.gameObject.activeInHierarchy);
+            if (slot == null) return;
+            try
+            {
+                var go = BuildVisual(new Ghost { PlayerId = m.id, Uid = m.uid, Vis = m.vis }, slot);
+                if (go == null) return;
+                go.name = $"DIM_Drag_{m.id}";
+                // Légèrement transparent : c'est le dé « en main » d'un autre joueur, pas encore posé
+                foreach (var cg in go.GetComponentsInChildren<CanvasGroup>(true)) cg.alpha = 0.85f;
+                _drags[m.id] = go;
+                _dragPos.Remove(m.id);
+            }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogDebug("Dé tenu distant : " + e.Message); }
+        }
+
+        public static void OnRemoteDragEnd(Msg m) => DestroyDrag(m.id);
+
+        private static void DestroyDrag(int playerId)
+        {
+            if (_drags.TryGetValue(playerId, out var go) && go != null) try { UnityEngine.Object.Destroy(go); } catch { }
+            _drags.Remove(playerId);
+        }
+
+        private static void ClearDrags()
+        {
+            foreach (var id in _drags.Keys.ToList()) DestroyDrag(id);
         }
 
         /// <summary>

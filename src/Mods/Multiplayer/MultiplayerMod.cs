@@ -82,6 +82,7 @@ namespace DiceMultiplayer
             try { Knockout.Update(); } catch { }
             try { Scaling.Update(); } catch { }
             try { Board.UpdateSlotValues(); } catch (Exception e) { Logger.LogDebug("SlotValues : " + e.Message); }
+            try { Board.UpdateDrag(); } catch (Exception e) { Logger.LogDebug("Drag : " + e.Message); }
 
 
             if (Coop.Active && Time.unscaledTime >= _nextCursor)

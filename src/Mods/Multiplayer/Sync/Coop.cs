@@ -228,6 +228,8 @@ namespace DiceMultiplayer.Sync
                     case T.ExecDone: Combat.OnRemoteExecDone(m); break;
                     case T.Spell: Spells.OnRemote(m); break;
                     case T.SlotVals: Board.OnRemoteSlotValues(m); break;
+                    case T.DragStart: Board.OnRemoteDragStart(m); break;
+                    case T.DragEnd: Board.OnRemoteDragEnd(m); break;
                     case T.Preview: Preview.OnRemote(m); break;
                     case T.OnMap: if (m.flag) _onMap.Add(m.id); else _onMap.Remove(m.id); TryResolveVote(); break;
                     case T.Vote: OnVote(m); break;
