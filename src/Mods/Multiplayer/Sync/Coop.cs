@@ -121,6 +121,7 @@ namespace DiceMultiplayer.Sync
             try { Board.RemovePlayer(id); } catch { }
             try { Heroes.RemovePlayer(id); } catch { }
             try { Preview.RemovePlayer(id); } catch { }
+            try { Slots.RemovePlayer(id); } catch { }
             Cursors.Remove(id);
             Votes.Remove(id);
             _onMap.Remove(id);
@@ -231,6 +232,7 @@ namespace DiceMultiplayer.Sync
                     case T.DragStart: Board.OnRemoteDragStart(m); break;
                     case T.DragEnd: Board.OnRemoteDragEnd(m); break;
                     case T.Preview: Preview.OnRemote(m); break;
+                    case T.BoardSlots: Slots.OnRemote(m); break;
                     case T.OnMap: if (m.flag) _onMap.Add(m.id); else _onMap.Remove(m.id); TryResolveVote(); break;
                     case T.Vote: OnVote(m); break;
                     case T.MapGo: ExecuteMapGo(m); break;

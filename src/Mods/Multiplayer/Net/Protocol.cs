@@ -26,6 +26,7 @@ namespace DiceMultiplayer.Net
         public const string ExecDone = "execdone"; // tous : mes dés ont fini de s exécuter (uid = étage, turn = tour)
         public const string Spell = "spell";       // hôte → tous : sort d ennemi posé sur une case (sx,sy = case, btn = rang, uid = direction)
         public const string SlotVals = "slotvals"; // tous : valeur finale de mes cases (text = "x,y=valeur;…")
+        public const string BoardSlots = "bslots"; // tous : mes cases actives (text = "x,y;…") ; les autres activent celles qui leur manquent
         public const string DragStart = "dstart";  // tous : je prends un dé (uid, vis = apparence) ; il suit mon curseur
         public const string DragEnd = "dend";      // tous : je lâche ou pose ce dé
         public const string EnemySync = "esync";   // hôte → tous : PV de référence des ennemis (text = "idx:pv:bloc;…")

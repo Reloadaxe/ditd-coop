@@ -515,9 +515,24 @@ namespace DiceMultiplayer.Ui
             for (int i = marks.Count; i < _votePool.Count; i++) SetActive(_votePool[i], false);
         }
 
+        /// <summary>
+        /// Vue du combat seule (pas de carte, pioche, menu… ouverts par-dessus) : les noms et aperçus posés sur la scène
+        /// sont dessinés au-dessus de tout, ils doivent disparaître quand une autre interface la recouvre.
+        /// </summary>
+        private static bool BattleView
+        {
+            get
+            {
+                var gc = Game.Safe(() => Game.Manager?.gameplayContext);
+                if (gc == null) return true;
+                var c = Game.Safe(() => gc.currentContext);
+                return c == GameplayContext.Context.Battle || c == GameplayContext.Context.BoardDicePlacement || c == GameplayContext.Context.NONE;
+            }
+        }
+
         private static void UpdateHeroes()
         {
-            var labels = Game.InBattle ? Heroes.HeroLabels() : new List<(int id, Vector2 screen, string extra)>();
+            var labels = Game.InBattle && BattleView ? Heroes.HeroLabels() : new List<(int id, Vector2 screen, string extra)>();
             for (int i = 0; i < labels.Count; i++)
             {
                 if (i >= _heroPool.Count)
@@ -539,7 +554,7 @@ namespace DiceMultiplayer.Ui
 
         private static void UpdatePreviews()
         {
-            var marks = Preview.RemoteMarkers();
+            var marks = BattleView ? Preview.RemoteMarkers() : new List<(Vector2 screen, List<int> ids, int total)>();
             for (int i = 0; i < marks.Count; i++)
             {
                 if (i >= _previewPool.Count)
