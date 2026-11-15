@@ -53,7 +53,7 @@ namespace DiceMultiplayer.Sync
                 case 1: M.PanelOpen = true; break;
                 case 2: ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_dir, "t2_panel.png")); break;
                 case 3: M.HostGame(); Coop.Toast("Message de test : vote enregistré"); break;
-                case 4: ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_dir, "t3_online.png")); break;
+                case 4: if (MultiplayerMod.Instance.PortOpener?.Current == DiceMultiplayer.Net.Upnp.State.Working && _t < 12) { _t--; break; } ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_dir, "t3_online.png")); MultiplayerMod.Instance.Logger.LogInfo("[uitest] UPnP : " + MultiplayerMod.Instance.PortOpener?.Status + " code=" + MultiplayerMod.Instance.InviteCodeText); break;
                 case 5: M.PanelOpen = false; Coop.Toast("Prêt ! En attente des autres joueurs"); break;
                 case 6: ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(_dir, "t4_hud.png")); break;
                 case 7: M.LeaveGame(); File.WriteAllText(System.IO.Path.Combine(_dir, "test_done.txt"), "ok"); Application.Quit(); break;

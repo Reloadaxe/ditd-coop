@@ -13,7 +13,7 @@ namespace DiceMultiplayer
     /// Mod multijoueur coop (2 ou 3 joueurs) en TCP direct.
     /// Tout le monde joue la même run, synchronisée en lockstep sur les entrées. Voir Sync/Coop.cs.
     /// </summary>
-    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.13.1",
+    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.14.0",
         Author = "DiceModding", Description = "Coop à 2 ou 3 : chacun sa run et son héros, ennemis et plateau partagés (TCP).")]
     public class MultiplayerMod : DiceMod
     {
@@ -183,15 +183,43 @@ namespace DiceMultiplayer
         /// <summary>PV des ennemis : multiplicateur par joueur en plus (choisi par l'hôte, figé au lancement de la run).</summary>
         public float HpPerExtraPlayer { get => _hpPerPlayer.Value; set => _hpPerPlayer.Value = value; }
 
+        /// <summary>Ouverture automatique du port sur la box (UPnP) de la partie hébergée, null sinon.</summary>
+        public Upnp PortOpener { get; private set; }
+
+        /// <summary>Code d'invitation (adresse publique + port), dès que la box a ouvert le port.</summary>
+        public string InviteCodeText => PortOpener?.Current == Upnp.State.Open ? InviteCode.Encode(PortOpener.ExternalIp, PortOpener.Port) : null;
+
         public void HostGame()
         {
-            try { Coop.Attach(NetSession.Host(_port.Value, LocalName)); Coop.AddLog($"Partie créée sur le port {_port.Value}"); }
+            try
+            {
+                Coop.Attach(NetSession.Host(_port.Value, LocalName));
+                Coop.AddLog($"Partie créée sur le port {_port.Value}");
+                PortOpener = Upnp.Start(_port.Value);   // jeu en ligne sans réglage : la box ouvre le port toute seule
+            }
             catch (Exception e) { Coop.AddLog("Impossible d'héberger : " + e.Message); Coop.Toast("Impossible d'héberger : " + e.Message); }
         }
 
+        /// <summary>Referme le port ouvert sur la box (fin de partie).</summary>
+        public void ClosePortMapping()
+        {
+            try { PortOpener?.Close(); } catch { }
+            PortOpener = null;
+        }
+
+        /// <summary>Rejoindre : le champ accepte un code d'invitation (XXXXX-XXXXX) ou une adresse IP.</summary>
         public void JoinGame()
         {
-            try { Coop.Attach(NetSession.Join(_host.Value.Trim(), _port.Value, LocalName)); }
+            try
+            {
+                var input = _host.Value.Trim();
+                if (InviteCode.TryDecode(input, out var ip, out var port))
+                {
+                    Coop.AddLog($"Code d'invitation : connexion à {ip}:{port}");
+                    Coop.Attach(NetSession.Join(ip, port, LocalName));
+                }
+                else Coop.Attach(NetSession.Join(input, _port.Value, LocalName));
+            }
             catch (Exception e) { Coop.AddLog("Connexion impossible : " + e.Message); Coop.Toast("Connexion impossible : " + e.Message); }
         }
 

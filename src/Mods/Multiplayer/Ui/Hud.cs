@@ -30,7 +30,8 @@ namespace DiceMultiplayer.Ui
         // Panneau coop
         private static RectTransform _panel, _offline, _online, _playersRows;
         private static TMP_InputField _fName, _fPort, _fHost, _fChat;
-        private static Text _status;   // (journal retiré du panneau : il cachait le reste ; il reste dans le fichier de log)
+        private static Text _status, _invite;   // (journal retiré du panneau : il cachait le reste ; il reste dans le fichier de log)
+        private static Btn _copyBtn;
         private static Btn _cursorsBtn, _difficultyBtn;
         private static readonly float[] DifficultySteps = { 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f };
 
@@ -140,12 +141,14 @@ namespace DiceMultiplayer.Ui
             Hint(_offline, "Partage ton adresse IP (locale, ou celle de Radmin VPN, ZeroTier, Tailscale) et ouvre le port TCP dans le pare-feu.");
             var r3 = Row(_offline); Button(r3, "Créer la partie", () => M.HostGame(), 96, 18);
             Section(_offline, "Rejoindre");
-            var r4 = Row(_offline); Caption(r4, "IP de l'hôte"); _fHost = Field(r4, M.HostIp);
+            var r4 = Row(_offline); Caption(r4, "Code ou IP"); _fHost = Field(r4, M.HostIp);
             var r5 = Row(_offline); Button(r5, "Rejoindre", () => M.JoinGame(), 96, 18);
 
             // En ligne
             _online = Group(win);
             _status = Label(_online, "", 7, Paper);
+            _invite = Label(_online, "", 7, Paper);
+            var rc = Row(_online); _copyBtn = Button(rc, "Copier le code", CopyInvite, 96, 16);
             _playersRows = Group(_online);
             _playersRows.GetComponent<VerticalLayoutGroup>().spacing = 2;
             Hint(_online, "Nouvelle run : chacun choisit son personnage, puis la partie démarre quand tout le monde est prêt.");
@@ -164,6 +167,37 @@ namespace DiceMultiplayer.Ui
         public static void OnReturn()
         {
             if (_fChat != null && (_fChat.isFocused || !string.IsNullOrWhiteSpace(_fChat.text))) SendChat();
+        }
+
+        /// <summary>Hôte : code d'invitation (port ouvert sur la box) ou explication si l'ouverture automatique a échoué.</summary>
+        private static void UpdateInvite(bool host)
+        {
+            var up = M.PortOpener;
+            bool show = host && up != null;
+            _invite.Active = show;
+            var code = M.InviteCodeText;
+            _copyBtn.Active = show && code != null;
+            if (!show) return;
+            switch (up.Current)
+            {
+                case Upnp.State.Working:
+                    _invite.Value = $"<color=#e9cfae>{up.Status}</color>";
+                    break;
+                case Upnp.State.Open:
+                    _invite.Value = $"Code d'invitation : <color=#fcd566>{code}</color>\n<color=#e9cfae>À donner à ton ami (Rejoindre)</color>";
+                    break;
+                default:
+                    _invite.Value = $"<color=#ff8f80>{up.Status}</color>\n<color=#e9cfae>En réseau local ou VPN : donne ton IP</color>";
+                    break;
+            }
+        }
+
+        private static void CopyInvite()
+        {
+            var code = M.InviteCodeText;
+            if (code == null) return;
+            GUIUtility.systemCopyBuffer = code;
+            Coop.Toast("Code copié : " + code);
         }
 
         private static void SendChat()
@@ -277,6 +311,7 @@ namespace DiceMultiplayer.Ui
             else
             {
                 _status.Value = $"{(net.IsHost ? "Tu héberges la partie" : "Connecté à la partie")}\n<color=#e9cfae>{net.Status}</color>";
+                UpdateInvite(net.IsHost);
                 var sig = string.Join("|", net.Players.Select(p => $"{p.Id}:{p.Name}:{p.Color}"));
                 if (sig != _playersSig)
                 {

@@ -156,6 +156,12 @@ namespace DiceMultiplayer.Sync
 
         public static void Detach()
         {
+            try { MultiplayerMod.Instance?.ClosePortMapping(); } catch { }
+            DetachSession();
+        }
+
+        private static void DetachSession()
+        {
             Net?.Dispose();
             Net = null;
             Cursors.Clear();

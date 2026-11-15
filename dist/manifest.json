@@ -1,6 +1,6 @@
 {
-    "version":  "0.13.1",
-    "changelog":  "Panneau F2 : journal retiré (il cachait le reste)",
+    "version":  "0.14.0",
+    "changelog":  "Jeu en ligne sans réglage : ouverture automatique du port sur la box (UPnP) et code d\u0027invitation",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "032dd22bc531337624aad623a72207e2bbbc1786c85726ce1a168fd37143c857",
+                      "sha256":  "ec26ec4157520fdfa5e2e3e07c515a2b200177bb7dfb735b8e244dec59f6d781",
                       "size":  50176,
-                      "version":  "0.13.1"
+                      "version":  "0.14.0"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.13.1"
+                      "version":  "0.14.0"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "4fb6311e5fe83f0d9ea6b63f03a7c1dec4178658b2cdcf30bfbc16eb5548f566",
+                      "sha256":  "9e80935c060ad51adeded2c021275a7fe9b7ce92c750b35fcec0535eaba5e87f",
                       "size":  10752,
-                      "version":  "0.13.1",
+                      "version":  "0.14.0",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "5299ab3e0a05a19533b053724961694221dfd88bea2f9f26d9769c1c1990e2c8",
+                      "sha256":  "47b9b22d308d9acc626c0704da2710a512b5d0fdcd77e4504bed61c6dfdef8b1",
                       "size":  8704,
-                      "version":  "0.13.1",
+                      "version":  "0.14.0",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "b7a88e629e013934011572d9c6a7cf4617b5aa10ef099b55fdf707adf6e7867b",
-                      "size":  187392,
-                      "version":  "0.13.1"
+                      "sha256":  "2fda4b0ec39ecb44519cab9c0d9606899422b81c3581b0acf4ade5a7e0ddd1f5",
+                      "size":  201216,
+                      "version":  "0.14.0"
                   }
               ],
     "remove":  [
