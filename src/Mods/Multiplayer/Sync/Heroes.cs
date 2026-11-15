@@ -302,7 +302,7 @@ namespace DiceMultiplayer.Sync
             var cam = Camera.main;
             if (cam == null || !Coop.Active || _local == null) return res;
             var localHealth = Game.Safe(() => _local.MyEntityCanvas != null ? _local.MyEntityCanvas.currentHealthDice : null);
-            var p = TopOf(localHealth) ?? Above(cam, _local.transform);
+            var p = Below(cam, _local.transform);
             if (p != null) res.Add((Coop.LocalId, p.Value, Knockout.LocalKO ? "<color=#ff7a6b>K.O.</color>" : null));
             foreach (var r in _remotes.Values)
             {
@@ -310,8 +310,8 @@ namespace DiceMultiplayer.Sync
                 var t = r.Go != null ? r.Go.transform : _local.transform;
                 string extra = r.KO ? "<color=#ff7a6b>K.O.</color>"
                              : r.HpText != null ? null : $"PV {r.Hp}/{r.MaxHp}" + (r.Block > 0 ? $"  Bloc {r.Block}" : "");
-                var s = (r.Go != null && r.Go.activeInHierarchy ? TopOf(r.HealthAnchor) : null) ?? Above(cam, t);
-                if (s != null) res.Add((r.PlayerId, s.Value + (r.Go == null ? new Vector2(0, 40) : Vector2.zero), extra));
+                var s = Below(cam, t);
+                if (s != null) res.Add((r.PlayerId, s.Value + (r.Go == null ? new Vector2(0, -30) : Vector2.zero), extra));
             }
             return res;
         }
@@ -333,6 +333,20 @@ namespace DiceMultiplayer.Sync
                 return sp.z < 0 ? (Vector2?)null : new Vector2(sp.x, sp.y);
             }
             catch { return null; }
+        }
+
+        /// <summary>Sous le personnage : bas de ses sprites (pieds), centré. Le nom ne cache plus la vie ni les marqueurs.</summary>
+        private static Vector2? Below(Camera cam, Transform t)
+        {
+            Bounds? b = null;
+            foreach (var sr in t.GetComponentsInChildren<SpriteRenderer>())
+            {
+                if (sr == null || !sr.enabled || sr.sprite == null) continue;
+                if (b == null) b = sr.bounds; else { var bb = b.Value; bb.Encapsulate(sr.bounds); b = bb; }
+            }
+            var world = b != null ? new Vector3(b.Value.center.x, b.Value.min.y, t.position.z) : t.position;
+            var s = cam.WorldToScreenPoint(world);
+            return s.z < 0 ? (Vector2?)null : new Vector2(s.x, s.y);
         }
 
         private static Vector2? Above(Camera cam, Transform t)

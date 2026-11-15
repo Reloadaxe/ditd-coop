@@ -521,9 +521,9 @@ namespace DiceMultiplayer.Ui
             {
                 if (i >= _heroPool.Count)
                 {
-                    var t = Label(Root, "", 7, Paper, TextAlignmentOptions.Bottom, false);
+                    var t = Label(Root, "", 7, Paper, TextAlignmentOptions.Top, false);
                     t.Rect.sizeDelta = new Vector2(120, 10);
-                    t.Rect.pivot = new Vector2(0.5f, 0);
+                    t.Rect.pivot = new Vector2(0.5f, 1);   // sous le personnage
                     _heroPool.Add(t);
                 }
                 var (id, screen, extra) = labels[i];
@@ -531,7 +531,7 @@ namespace DiceMultiplayer.Ui
                 lbl.Active = true;
                 string ready = Coop.ReadyPlayers.Contains(id) ? "  <color=#c3ff96>prêt</color>" : "";
                 lbl.Value = $"<color={Coop.ColorOf(id)}>{Coop.NameOf(id)}</color>{ready}{(extra != null ? "  " + extra : "")}";
-                AtScreen(lbl.Rect, screen, new Vector2(0, 1));
+                AtScreen(lbl.Rect, screen, new Vector2(0, -2));
             }
             for (int i = labels.Count; i < _heroPool.Count; i++) _heroPool[i].Active = false;
         }
