@@ -74,9 +74,13 @@ namespace DiceMultiplayer.Sync
         private static string _pendingKey;
         private static float _pendingSince;
         private static bool _releasing;
-        private const float ExecGrace = 0.6f, ExecTimeout = 8f;
+        private const float ExecGrace = 0.4f, ExecTimeout = 4f;
 
-        private static string ExecKey(int floor, int turn) => $"{floor}:{turn}";
+        // Clé = numéro de tour seul (remis à zéro à chaque combat) : un compteur d'étages local pouvait différer d'un jeu à
+        // l'autre, et l'attente allait alors toujours jusqu'au délai maximum
+        private static string ExecKey(int turn) => turn.ToString();
+
+        public static void ResetExec() { _execDone.Clear(); _execLast.Clear(); _pendingBattle = null; }
 
         private static void MarkDone(string key, int id)
         {
@@ -88,14 +92,19 @@ namespace DiceMultiplayer.Sync
         private static bool AllDone(string key) =>
             _execDone.TryGetValue(key, out var set) && Coop.Net.Players.All(p => set.Contains(p.Id));
 
-        public static void OnRemoteExecDone(Msg m) => MarkDone(ExecKey(m.uid, m.turn), m.id);
+        public static void OnRemoteExecDone(Msg m)
+        {
+            MarkDone(ExecKey(m.turn), m.id);
+            MultiplayerMod.Instance.Logger.LogInfo($"[sync] Fin d'exécution de {Coop.NameOf(m.id)} (tour {m.turn}).");
+        }
 
         /// <summary>Préfixe de BattleSystem.ChangeState : retient l'entrée en phase ennemie après l'exécution des dés.</summary>
         public static bool OnBattleChangeState(BattleSystem battle, BattleSystem.TurnState next)
         {
             if (!Coop.Active || _releasing || next != BattleSystem.TurnState.EnemyPhaseAfterPlayer) return true;
             if (Coop.Net.Players.Count < 2) return true;
-            var key = ExecKey(MultiplayerMod.CurrentFloorKey, Game.Turn);
+            var key = ExecKey(Game.Turn);
+            MultiplayerMod.Instance.Logger.LogInfo($"[sync] Mes dés ont fini (tour {Game.Turn}) : attente des autres.");
             MarkDone(key, Coop.LocalId);
             Coop.Send(new Msg { t = T.ExecDone, uid = MultiplayerMod.CurrentFloorKey, turn = Game.Turn });
             _pendingBattle = battle;
