@@ -98,6 +98,9 @@ namespace DiceMultiplayer.Sync
             P(h, typeof(Player), nameof(Player.CanCompleteDeath), nameof(CanCompleteDeathPrefix));
             // K.O. : le bouton « Tirer » (et ses variantes) ne répond plus
             P(h, typeof(CustomButtonController), "OnPointerClickResponse", nameof(CustomButtonClickPrefix));
+            // K.O. : actions bloquées à la source (souris, clavier et manette passent par elles)
+            P(h, typeof(BackpackUI), nameof(BackpackUI.OnDrawDiceFromEditor), nameof(KoActionPrefix));
+            P(h, typeof(GameObjectDice), nameof(GameObjectDice.OnRerollClicked), nameof(KoActionPrefix));
             // Phase ennemie retenue tant que les autres joueurs n'ont pas fini d'exécuter leurs dés
             P(h, typeof(BattleSystem), nameof(BattleSystem.ChangeState), nameof(BattleChangeStatePrefix));
             // Sorts d'ennemis sur le plateau (points faibles du boss scorpion) : l'hôte fait foi
@@ -388,6 +391,11 @@ namespace DiceMultiplayer.Sync
         {
             try { Combat.OnEnemyDamaged(__instance, __0); }
             catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("EnemyDamagePostfix : " + e.Message); }
+        }
+
+        private static bool KoActionPrefix()
+        {
+            try { return !(Knockout.LocalKO && Game.InBattle && Knockout.Refuse()); } catch { return true; }
         }
 
         private static bool CustomButtonClickPrefix(CustomButtonController __instance)

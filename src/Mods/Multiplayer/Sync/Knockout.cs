@@ -131,12 +131,32 @@ namespace DiceMultiplayer.Sync
             if (p == null) return;
             try
             {
+                // À 0 PV, le jeu a marqué le héros « en train de mourir » et joué l'animation de mort : on remet les deux
+                // à zéro, sinon seuls sa vie et son nom réapparaissent
+                try { p.isDying = false; } catch { }
                 if (p.CurrentHealth < 1) p.ChangeCurrentHealth(1);
                 p.ForceHealthRefresh();
+                ResetAnimator(p.gameObject);
                 Coop.AddLog("De retour avec 1 PV.");
                 Coop.Toast("De retour avec 1 PV !");
             }
             catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("Retour à 1 PV : " + e.Message); }
+        }
+
+        /// <summary>Animation remise à l'état de départ (repos) et sprites réactivés : sortie de l'animation de mort.</summary>
+        public static void ResetAnimator(GameObject go)
+        {
+            if (go == null) return;
+            try
+            {
+                foreach (var a in go.GetComponentsInChildren<Animator>(true))
+                {
+                    if (a == null) continue;
+                    a.Rebind();
+                    a.Update(0f);
+                }
+            }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogDebug("Réinitialisation de l'animation : " + e.Message); }
         }
 
         /// <summary>Chaque frame en combat : si tout le monde est K.O., la défaite est validée chez moi aussi.</summary>

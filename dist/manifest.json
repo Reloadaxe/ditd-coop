@@ -1,6 +1,6 @@
 {
-    "version":  "0.12.2",
-    "changelog":  "Joueur K.O. : spectateur (dés, Tirer, Terminé bloqués), héros grisé et visible chez tous",
+    "version":  "0.12.3",
+    "changelog":  "Retour à 1 PV : le héros réapparaît ; K.O. : raccourcis clavier/manette bloqués",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "85f48ac4993de0b9e7b7f441b1568819edad7c4f145a40da5aa1ad87ec0777a1",
+                      "sha256":  "ea4d7c641c0b65764c8bffec1d67fe52ebd0d215612febff03cc05d8e893f079",
                       "size":  50176,
-                      "version":  "0.12.2"
+                      "version":  "0.12.3"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.12.2"
+                      "version":  "0.12.3"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "6280d31e892cd2a33dc3b2bed1efdb6b6f0d5cacca8c9be86f67e9505b30e21e",
+                      "sha256":  "f1af37924e165dea643ad3441a0a6a47adb27f3cc3e1ab1b8852140932bda520",
                       "size":  10752,
-                      "version":  "0.12.2",
+                      "version":  "0.12.3",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "5e186169536d117416c2cf26881342362a84364b35e99c13582b9f7fb944aa39",
+                      "sha256":  "02b3dac8af45b09cc46c76085301a5ddb2a9a8f8d9bc9d76116518ba0cf94bc2",
                       "size":  8704,
-                      "version":  "0.12.2",
+                      "version":  "0.12.3",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "91189e6e962382ba21fe2c2bcf0ab0f4c4317f0f782cfc000fbc9819da44dcb7",
-                      "size":  183296,
-                      "version":  "0.12.2"
+                      "sha256":  "288af8066d18242e31d066699b6b2fc1e95b805337b465907a8577afe8e7ce3b",
+                      "size":  184320,
+                      "version":  "0.12.3"
                   }
               ],
     "remove":  [

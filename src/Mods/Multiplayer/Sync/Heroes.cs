@@ -128,7 +128,12 @@ namespace DiceMultiplayer.Sync
                 r.Go.transform.position = local.transform.position + r.Offset;
                 // K.O. : la copie reste visible, grisée
                 if (!r.Go.activeSelf) r.Go.SetActive(true);
-                if (r.GreyShown != r.KO) { Knockout.SetGrey(r.Go, r.KO); r.GreyShown = r.KO; }
+                if (r.GreyShown != r.KO)
+                {
+                    Knockout.SetGrey(r.Go, r.KO);
+                    if (!r.KO) { Knockout.ResetAnimator(r.Go); r.LastState = 0; }   // de retour : sortie de l'animation de mort
+                    r.GreyShown = r.KO;
+                }
                 if (r.Anim != null && r.WantedState != 0 && r.WantedState != r.LastState)
                 {
                     r.LastState = r.WantedState;
