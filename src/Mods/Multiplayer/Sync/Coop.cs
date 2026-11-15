@@ -80,8 +80,78 @@ namespace DiceMultiplayer.Sync
             Detach();
             Net = s;
             s.OnMessage += Handle;
-            s.OnPlayersChanged += () => { AddLog("Joueurs : " + string.Join(", ", s.Players.Select(p => p.Name))); Lobby.OnPlayersChanged(); };
-            s.OnDisconnected += reason => AddLog(reason);
+            _knownPlayers.Clear();
+            s.OnPlayersChanged += () =>
+            {
+                AddLog("Joueurs : " + string.Join(", ", s.Players.Select(p => p.Name)));
+                Lobby.OnPlayersChanged();
+                OnPlayersChanged();
+            };
+            s.OnDisconnected += reason =>
+            {
+                AddLog(reason);
+                // Client : l'hôte est parti (ou refus) → la partie s'arrête pour moi aussi
+                if (!s.IsHost) Game.Schedule(() => EndSession($"La partie est terminée : {reason}"), 0f);
+            };
+        }
+
+        // ───────────── Départs ─────────────
+
+        /// <summary>Joueurs connus (id → nom), pour repérer les départs et garder leur nom.</summary>
+        private static readonly Dictionary<int, string> _knownPlayers = new Dictionary<int, string>();
+
+        private static void OnPlayersChanged()
+        {
+            if (Net == null) return;
+            var now = Net.Players.ToDictionary(p => p.Id, p => p.Name);
+            foreach (var kv in _knownPlayers.ToList())
+                if (!now.ContainsKey(kv.Key) && kv.Key != LocalId) OnPlayerLeft(kv.Key, kv.Value);
+            _knownPlayers.Clear();
+            foreach (var kv in now) _knownPlayers[kv.Key] = kv.Value;
+        }
+
+        /// <summary>
+        /// Un joueur a quitté : il est retiré de la partie partout (dés, héros, aperçus, vote, « prêt », curseur, choix de
+        /// personnage). Personne ne l'attend plus (fin de tour, vote, fin d'exécution).
+        /// </summary>
+        private static void OnPlayerLeft(int id, string name)
+        {
+            AddLog($"{name} a quitté la partie.");
+            Toast($"{name} a quitté la partie");
+            try { Board.RemovePlayer(id); } catch { }
+            try { Heroes.RemovePlayer(id); } catch { }
+            try { Preview.RemovePlayer(id); } catch { }
+            Cursors.Remove(id);
+            Votes.Remove(id);
+            _onMap.Remove(id);
+            _ready.Remove(id);
+            Team.Picks.Remove(id);
+            Team.RunPicks.RemoveAll(p => p.Id == id);   // sinon sa copie de héros serait recréée
+            try { TryResolveVote(); } catch { }
+            try { HostCheckAllReady(); } catch { }
+        }
+
+        /// <summary>
+        /// Fin de session (l'hôte est parti, ou je quitte) : déconnexion, et retour à l'écran titre si une run est en cours
+        /// (la sélection de personnage ouverte par l'hôte est refermée aussi).
+        /// </summary>
+        public static void EndSession(string message)
+        {
+            bool inRun = Game.InRun;
+            try
+            {
+                // Sélection de personnage ouverte par l'hôte : refermée avant la déconnexion (bouton retour rejoué)
+                if (!inRun && Lobby.SelectionOpen)
+                {
+                    var t = UnityEngine.Object.FindObjectOfType<CanvasTitleScreen>();
+                    if (t != null) WithReplay(() => t.OnClickReturnTitleButton());
+                }
+            }
+            catch { }
+            Detach();
+            if (!string.IsNullOrEmpty(message)) { AddLog(message); Toast(message); }
+            try { if (inRun) Game.Manager?.ExitToTitleScreen(0.5f); }
+            catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("Retour à l'écran titre : " + e.Message); }
         }
 
         public static void Detach()

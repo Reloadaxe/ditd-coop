@@ -79,6 +79,14 @@ namespace DiceMultiplayer.Sync
         private static bool _localGrey;
 
         /// <summary>Animation du héros d'un autre joueur : sa copie chez moi la jouera (même contrôleur d'animation).</summary>
+        /// <summary>Joueur parti : sa copie de héros disparaît.</summary>
+        public static void RemovePlayer(int id)
+        {
+            if (!_remotes.TryGetValue(id, out var r)) return;
+            if (r.Go != null) try { UnityEngine.Object.Destroy(r.Go); } catch { }
+            _remotes.Remove(id);
+        }
+
         public static void OnRemoteAnim(Msg m)
         {
             if (!_remotes.TryGetValue(m.id, out var r)) _remotes[m.id] = r = new Remote { PlayerId = m.id };

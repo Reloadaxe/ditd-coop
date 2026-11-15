@@ -82,6 +82,12 @@ namespace DiceMultiplayer.Sync
 
         // ───── Réseau → nombre du jeu ─────
 
+        /// <summary>Joueur parti : ses dégâts prévus ne comptent plus.</summary>
+        public static void RemovePlayer(int id)
+        {
+            if (_remote.Remove(id)) _dirty = true;
+        }
+
         public static void OnRemote(Msg m)
         {
             var d = new Dictionary<int, int>();

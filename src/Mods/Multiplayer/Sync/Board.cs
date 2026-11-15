@@ -190,6 +190,14 @@ namespace DiceMultiplayer.Sync
             _ghosts.Add(new Ghost { PlayerId = m.id, Uid = m.uid, X = m.sx, Y = m.sy, Name = m.text, Value = m.btn, Vis = m.vis, Data = m.path, Face = (int)m.h, Extra = m.comp });
         }
 
+        /// <summary>Joueur parti : ses dés (copies) disparaissent tout de suite, même en cours d'exécution.</summary>
+        public static void RemovePlayer(int id)
+        {
+            foreach (var g in _ghosts.Where(g => g.PlayerId == id)) Destroy(g);
+            _ghosts.RemoveAll(g => g.PlayerId == id);
+            _remoteVals.Remove(id);
+        }
+
         public static void OnRemoteRemove(Msg m)
         {
             foreach (var g in _ghosts.Where(g => g.PlayerId == m.id && g.Uid == m.uid)) Destroy(g);

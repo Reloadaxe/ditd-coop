@@ -13,7 +13,7 @@ namespace DiceMultiplayer
     /// Mod multijoueur coop (2 ou 3 joueurs) en TCP direct.
     /// Tout le monde joue la même run, synchronisée en lockstep sur les entrées. Voir Sync/Coop.cs.
     /// </summary>
-    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.12.5",
+    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.13.0",
         Author = "DiceModding", Description = "Coop à 2 ou 3 : chacun sa run et son héros, ennemis et plateau partagés (TCP).")]
     public class MultiplayerMod : DiceMod
     {
@@ -197,8 +197,7 @@ namespace DiceMultiplayer
 
         public void LeaveGame()
         {
-            Coop.Detach();
-            Coop.AddLog("Session fermée.");
+            Coop.EndSession(Coop.Active && Coop.IsHost ? "Tu as fermé la partie." : "Tu as quitté la partie.");
         }
 
         public void SendChat(string text)
