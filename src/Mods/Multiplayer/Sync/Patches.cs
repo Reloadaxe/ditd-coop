@@ -123,6 +123,7 @@ namespace DiceMultiplayer.Sync
             // Aperçu des dégâts : la flèche de cible au-dessus de l'ennemi affiche aussi les dégâts des autres joueurs.
             P(h, typeof(TargetEnemyArrow), nameof(TargetEnemyArrow.ChangeToAttack), nameof(Preview.ArrowAttackPrefix), patchType: typeof(Preview));
             P(h, typeof(TargetEnemyArrow), nameof(TargetEnemyArrow.ChangeToTargetOnly), nameof(Preview.ArrowTargetOnlyPrefix), patchType: typeof(Preview));
+            P(h, typeof(BattleBoard), nameof(BattleBoard.RecalculateAllBattleValues), nameof(Preview.RecalcPostfix), postfix: true, patchType: typeof(Preview));
 
             // Récompenses, reliques, potions, main et dés (tirage de la pioche, lancers) propres à chaque joueur ;
             // ennemis, combat et carte restent communs

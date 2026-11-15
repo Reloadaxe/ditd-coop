@@ -27,7 +27,10 @@ namespace DiceMultiplayer.Sync
         private static readonly Dictionary<IntPtr, int> _arrowLocal = new Dictionary<IntPtr, int>();
         private static string _lastSent;
         private static float _nextCompute;
-        private static bool _dirty;
+        private static bool _dirty, _kick;
+        /// <summary>Le jeu vient de recalculer les valeurs du plateau : aperçu recalculé et envoyé à la prochaine frame.</summary>
+        public static void Kick() => _kick = true;
+        public static void RecalcPostfix() => _kick = true;
         private static bool _inRefresh;
         private static TargetEnemySystem _system;
 
@@ -51,8 +54,10 @@ namespace DiceMultiplayer.Sync
                 return;
             }
             if (_dirty) { _dirty = false; RefreshArrows(); }
-            if (Time.unscaledTime < _nextCompute) return;
-            _nextCompute = Time.unscaledTime + 0.3f;
+            // Calcul dès que le jeu recalcule le plateau (Kick), sinon contrôle de secours toutes les 0,5 s
+            if (!_kick && Time.unscaledTime < _nextCompute) return;
+            _kick = false;
+            _nextCompute = Time.unscaledTime + 0.5f;
 
             var st = Game.TurnState;
             bool planning = st == BattleSystem.TurnState.SelectDice || st == BattleSystem.TurnState.PerformFlashDice

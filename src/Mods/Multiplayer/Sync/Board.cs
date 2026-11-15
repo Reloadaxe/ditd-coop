@@ -73,8 +73,9 @@ namespace DiceMultiplayer.Sync
             var c = slot.CurrentCoord;
             var taken = _ghosts.FirstOrDefault(g => g.X == c.x && g.Y == c.y && !g.Stale);
             if (taken != null) { Coop.Toast($"Case déjà prise par {Coop.NameOf(taken.PlayerId)}"); return false; }
-            // Envoyé APRÈS la pose : le dé a alors son apparence de plateau (en main, il n'a pas le même rendu)
-            Game.Schedule(() => SendPlace(dice, c.x, c.y), 0.35f);
+            // Envoyé tout de suite (dégâts visibles sans attendre), puis renvoyé une fois posé : le dé a alors son apparence de plateau
+            SendPlace(dice, c.x, c.y);
+            Game.Schedule(() => ResendIfOnBoard(dice), 0.35f);
             return true;
         }
 
