@@ -157,6 +157,7 @@ namespace DiceMultiplayer.Sync
         public static void Detach()
         {
             try { MultiplayerMod.Instance?.ClosePortMapping(); } catch { }
+            try { MultiplayerMod.Instance?.Link?.Unpublish(); } catch { }   // partie retirée de CoopLink
             DetachSession();
         }
 

@@ -47,6 +47,15 @@ foreach ($m in $mods) {
     $entries += @{ src = "src\Mods\$name\bin\Release\$name.dll"; path = "Mods/$name/$name.dll"; optional = $optionalMods[$name] }
 }
 
+# CoopLink (réseaux d'amis, dépôt séparé github.com/Reloadaxe/coop-link, cloné à côté de DiceModding) : installé dans le
+# dossier du jeu ; le mod Multijoueur le lance au besoin
+if (Test-Path (Join-Path $root "..\coop-link\CoopLink.csproj")) {
+    # Sortie à part : un CoopLink lancé depuis bin\Release verrouillerait son exe
+    $clOut = Join-Path $root "..\coop-link\bin\publish\"
+    Build "..\coop-link\CoopLink.csproj" @("-p:OutDir=$clOut")
+    $entries += @{ src = "..\coop-link\bin\publish\CoopLink.exe"; path = "CoopLink/CoopLink.exe"; optional = $null }
+}
+
 if (Test-Path $files) { Remove-Item -Recurse -Force $files }
 New-Item -ItemType Directory -Force $files | Out-Null
 

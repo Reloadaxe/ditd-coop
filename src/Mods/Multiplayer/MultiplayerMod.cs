@@ -13,7 +13,7 @@ namespace DiceMultiplayer
     /// Mod multijoueur coop (2 ou 3 joueurs) en TCP direct.
     /// Tout le monde joue la même run, synchronisée en lockstep sur les entrées. Voir Sync/Coop.cs.
     /// </summary>
-    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.14.0",
+    [DiceModInfo("dicemodding.multiplayer", "Multijoueur Coop", "0.15.0",
         Author = "DiceModding", Description = "Coop à 2 ou 3 : chacun sa run et son héros, ennemis et plateau partagés (TCP).")]
     public class MultiplayerMod : DiceMod
     {
@@ -53,6 +53,9 @@ namespace DiceMultiplayer
 
             Coop.RotateLeader = () => _rotateLeader.Value;
             Coop.LocalOnlyKeywords = () => _localOnly.Value.Split(',');
+            _linkNetwork = Config.Bind("CoopLink", "Reseau", "", "Réseau CoopLink utilisé pour héberger");
+            Link = new CoopLinkClient();
+            Link.Start();
         }
 
         public override void OnEnable() => Patches.Apply(Harmony);
@@ -64,6 +67,7 @@ namespace DiceMultiplayer
         public override void OnUpdate()
         {
             try { UiDump.Update(); } catch { }
+            while (_mainThread.TryDequeue(out var job)) { try { job(); } catch (Exception e) { Logger.LogWarning("CoopLink : " + e.Message); } }
             try { AutoTest.Update(); } catch (Exception e) { Logger.LogWarning("AutoTest : " + e.Message); }
             try { Hud.Update(); } catch (Exception e) { Logger.LogDebug("Hud : " + e.Message); }
             var net = Coop.Net;
@@ -189,15 +193,76 @@ namespace DiceMultiplayer
         /// <summary>Code d'invitation (adresse publique + port), dès que la box a ouvert le port.</summary>
         public string InviteCodeText => PortOpener?.Current == Upnp.State.Open ? InviteCode.Encode(PortOpener.ExternalIp, PortOpener.Port) : null;
 
-        public void HostGame()
+        public void HostGame() => HostGame(true);
+
+        private bool HostGame(bool openPort)
         {
             try
             {
                 Coop.Attach(NetSession.Host(_port.Value, LocalName));
                 Coop.AddLog($"Partie créée sur le port {_port.Value}");
-                PortOpener = Upnp.Start(_port.Value);   // jeu en ligne sans réglage : la box ouvre le port toute seule
+                if (openPort) PortOpener = Upnp.Start(_port.Value);   // jeu en ligne sans réglage : la box ouvre le port toute seule
+                return true;
             }
-            catch (Exception e) { Coop.AddLog("Impossible d'héberger : " + e.Message); Coop.Toast("Impossible d'héberger : " + e.Message); }
+            catch (Exception e) { Coop.AddLog("Impossible d'héberger : " + e.Message); Coop.Toast("Impossible d'héberger : " + e.Message); return false; }
+        }
+
+        // ───────────── CoopLink (réseaux d'amis sécurisés) ─────────────
+
+        /// <summary>Client de CoopLink, toujours actif (il se reconnecte tout seul quand CoopLink est lancé).</summary>
+        public CoopLinkClient Link { get; private set; }
+        private ConfigEntry<string> _linkNetwork;
+        private readonly System.Collections.Concurrent.ConcurrentQueue<Action> _mainThread = new System.Collections.Concurrent.ConcurrentQueue<Action>();
+
+        /// <summary>Réseau CoopLink choisi pour héberger (le premier par défaut).</summary>
+        public CoopLinkClient.Network LinkNetwork
+        {
+            get
+            {
+                var nets = Link?.Networks;
+                if (nets == null || nets.Count == 0) return null;
+                return nets.FirstOrDefault(n => n.id == _linkNetwork.Value) ?? nets[0];
+            }
+        }
+
+        public void CycleLinkNetwork()
+        {
+            var nets = Link?.Networks;
+            if (nets == null || nets.Count == 0) return;
+            int i = nets.FindIndex(n => n.id == LinkNetwork?.id);
+            _linkNetwork.Value = nets[(i + 1) % nets.Count].id;
+        }
+
+        /// <summary>Hôte : partie créée puis publiée sur le réseau CoopLink choisi (pas d'ouverture de port : CoopLink relaie).</summary>
+        public void HostOnLink()
+        {
+            var net = LinkNetwork;
+            if (Link == null || !Link.Connected || net == null) { Coop.Toast("CoopLink : aucun réseau disponible"); return; }
+            if (!HostGame(false)) return;
+            Link.Publish(net.id, $"Partie de {LocalName}", _port.Value, (sid, err) => _mainThread.Enqueue(() =>
+            {
+                if (sid != null) { Coop.AddLog($"Partie publiée sur « {net.name} » (CoopLink)."); Coop.Toast($"Partie visible par « {net.name} »"); }
+                else { Coop.AddLog("CoopLink : publication impossible : " + err); Coop.Toast("CoopLink : " + err); }
+            }));
+        }
+
+        /// <summary>Ami : CoopLink ouvre un port local relié à la partie de l'hôte ; on s'y connecte comme en local.</summary>
+        public void JoinOnLink(CoopLinkClient.Session s)
+        {
+            if (Link == null || s == null) return;
+            Coop.Toast($"Connexion à {s.title}…");
+            Link.Connect(s.id, (port, err) => _mainThread.Enqueue(() =>
+            {
+                if (port <= 0) { Coop.AddLog("CoopLink : " + err); Coop.Toast("CoopLink : " + err); return; }
+                try { Coop.Attach(NetSession.Join("127.0.0.1", port, LocalName)); }
+                catch (Exception e) { Coop.Toast("Connexion impossible : " + e.Message); }
+            }));
+        }
+
+        public void LaunchLink()
+        {
+            if (CoopLinkClient.Launch(BepInEx.Paths.GameRootPath)) Coop.Toast("Lancement de CoopLink…");
+            else Coop.Toast("CoopLink introuvable : réinstalle le mod avec le launcher");
         }
 
         /// <summary>Referme le port ouvert sur la box (fin de partie).</summary>

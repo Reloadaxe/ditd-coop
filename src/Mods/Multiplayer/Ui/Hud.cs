@@ -137,10 +137,11 @@ namespace DiceMultiplayer.Ui
             _offline = Group(win);
             var r1 = Row(_offline); Caption(r1, "Pseudo"); _fName = Field(r1, M.PlayerName);
             var r2 = Row(_offline); Caption(r2, "Port"); _fPort = Field(r2, M.Port.ToString(), 50, 17, true); Size(_fPort.GetComponent<Image>(), 50, 17, 0);
-            Section(_offline, "Héberger");
+            BuildLinkSection(_offline);
+            Section(_offline, "Sans CoopLink : héberger");
             Hint(_offline, "Partage ton adresse IP (locale, ou celle de Radmin VPN, ZeroTier, Tailscale) et ouvre le port TCP dans le pare-feu.");
             var r3 = Row(_offline); Button(r3, "Créer la partie", () => M.HostGame(), 96, 18);
-            Section(_offline, "Rejoindre");
+            Section(_offline, "Sans CoopLink : rejoindre");
             var r4 = Row(_offline); Caption(r4, "Code ou IP"); _fHost = Field(r4, M.HostIp);
             var r5 = Row(_offline); Button(r5, "Rejoindre", () => M.JoinGame(), 96, 18);
 
@@ -167,6 +168,56 @@ namespace DiceMultiplayer.Ui
         public static void OnReturn()
         {
             if (_fChat != null && (_fChat.isFocused || !string.IsNullOrWhiteSpace(_fChat.text))) SendChat();
+        }
+
+        // ───────────── CoopLink ─────────────
+
+        private static Text _linkStatus;
+        private static Btn _linkNetBtn, _linkHostBtn, _linkLaunchBtn;
+        private static RectTransform _linkSessions;
+        private static string _linkSig;
+
+        private static void BuildLinkSection(Transform parent)
+        {
+            Section(parent, "En ligne avec CoopLink");
+            _linkStatus = Label(parent, "", 7, Muted);
+            var row = Row(parent, 4);
+            _linkNetBtn = Button(row, "", () => M.CycleLinkNetwork(), 120, 16);
+            _linkHostBtn = Button(row, "Héberger", () => M.HostOnLink(), 64, 16);
+            _linkLaunchBtn = Button(parent, "Lancer CoopLink", () => M.LaunchLink(), 110, 16);
+            _linkSessions = Group(parent);
+            _linkSessions.GetComponent<VerticalLayoutGroup>().spacing = 2;
+        }
+
+        private static void UpdateLinkSection()
+        {
+            var link = M.Link;
+            bool on = link != null && link.Connected;
+            var nets = on ? link.Networks : null;
+            var net = M.LinkNetwork;
+            _linkLaunchBtn.Active = !on;
+            _linkNetBtn.Active = on && net != null;
+            _linkHostBtn.Active = on && net != null;
+            if (!on) _linkStatus.Value = (link?.Error ?? "Connexion à CoopLink…") + ". Lance CoopLink pour jouer avec tes réseaux d'amis.";
+            else if (nets == null || nets.Count == 0) _linkStatus.Value = "Aucun réseau : crée-en un ou rejoins celui d'un ami dans CoopLink.";
+            else
+            {
+                int online = net?.members?.Count(m => m.online) ?? 0;
+                _linkStatus.Value = $"Connecté en tant que {link.PlayerName}. {online} ami(s) en ligne sur ce réseau.";
+                _linkNetBtn.Label.Value = "Réseau : " + net.name;
+            }
+
+            // Parties des amis : un bouton par partie
+            var sessions = on ? link.Sessions.Where(s => !s.mine).ToList() : new List<CoopLinkClient.Session>();
+            var sig = string.Join("|", sessions.Select(s => s.id + s.title + s.networkName));
+            if (sig == _linkSig) return;
+            _linkSig = sig;
+            Clear(_linkSessions);
+            foreach (var s in sessions.Take(4))
+            {
+                var sess = s;
+                Button(_linkSessions, $"Rejoindre : {s.title} ({s.networkName})", () => M.JoinOnLink(sess), 190, 16);
+            }
         }
 
         /// <summary>Hôte : code d'invitation (port ouvert sur la box) ou explication si l'ouverture automatique a échoué.</summary>
@@ -307,6 +358,7 @@ namespace DiceMultiplayer.Ui
                 if (!_fName.isFocused && _fName.text != M.PlayerName) M.PlayerName = _fName.text;
                 if (int.TryParse(_fPort.text, out var port) && port >= 1024 && port <= 65535) M.Port = port;
                 if (_fHost.text != M.HostIp) M.HostIp = _fHost.text;
+                UpdateLinkSection();
             }
             else
             {
