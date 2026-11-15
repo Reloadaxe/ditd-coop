@@ -28,7 +28,7 @@ namespace DiceMultiplayer.Ui
         private static Btn _menuBtn;
 
         // Panneau coop
-        private static RectTransform _panel, _offline, _online, _playersRows;
+        private static RectTransform _panel, _panelContent, _offline, _online, _playersRows;
         private static TMP_InputField _fName, _fPort, _fHost, _fChat;
         private static Text _status, _invite;   // (journal retiré du panneau : il cachait le reste ; il reste dans le fichier de log)
         private static Btn _copyBtn;
@@ -119,19 +119,37 @@ namespace DiceMultiplayer.Ui
 
         private static void BuildPanel()
         {
-            var win = Box(Root, SprWindow, 12, 10, 4, false);
-            win.GetComponent<VerticalLayoutGroup>().childForceExpandWidth = true;
-            var fit = win.gameObject.AddComponent<ContentSizeFitter>();
-            fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            Place(win, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(10, 0), new Vector2(214, 200));
-            win.GetComponent<Image>().raycastTarget = true;   // les clics sur le panneau ne traversent pas
-            _panel = win;
+            // Fenêtre de hauteur limitée à l'écran : titre fixe en haut, contenu qui défile (molette) en dessous
+            var winImg = Image(Root, SprWindow, null, "Panel");
+            winImg.raycastTarget = true;   // les clics sur le panneau ne traversent pas
+            var frame = winImg.rectTransform;
+            Place(frame, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(10, 0), new Vector2(214, 200));
+            _panel = frame;
 
-            var head = Row(win, 4);
+            var head = Row(frame, 4);
+            Place(head, new Vector2(0, 1), new Vector2(0, 1), new Vector2(12, -10), new Vector2(190, 12));
             var title = Label(head, "Multijoueur coop", 9, Gold, TextAlignmentOptions.MidlineLeft, false);
             Size(title.Rect.GetComponent<TextMeshProUGUI>(), -1, 12, 1);
             var close = IconButton(head, SprClose, () => M.PanelOpen = false, 10);
             Size(close.GetComponent<Image>(), 10, 10);
+
+            var viewport = Image(frame, null, new Color(0, 0, 0, 0), "Viewport");
+            viewport.raycastTarget = true;   // reçoit la molette
+            Stretch(viewport.rectTransform, 12, 9, 10, 26);
+            viewport.gameObject.AddComponent<RectMask2D>();
+            var win = Node("Content", viewport.rectTransform);
+            win.anchorMin = new Vector2(0, 1); win.anchorMax = new Vector2(1, 1); win.pivot = new Vector2(0.5f, 1);
+            win.offsetMin = new Vector2(0, 0); win.offsetMax = new Vector2(-2, 0);
+            var v = win.gameObject.AddComponent<VerticalLayoutGroup>();
+            v.spacing = 4; v.childControlWidth = true; v.childControlHeight = true;
+            v.childForceExpandWidth = true; v.childForceExpandHeight = false;
+            win.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            var scroll = viewport.gameObject.AddComponent<ScrollRect>();
+            scroll.content = win; scroll.viewport = viewport.rectTransform;
+            scroll.horizontal = false; scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.inertia = false; scroll.scrollSensitivity = 14f;
+            _panelContent = win;
 
             // Hors ligne
             _offline = Group(win);
@@ -349,6 +367,11 @@ namespace DiceMultiplayer.Ui
             bool open = M.PanelOpen;
             SetActive(_panel, open);
             if (!open) return;
+            // Hauteur : celle du contenu, sans dépasser l'écran (au-delà, le contenu défile)
+            float wanted = LayoutUtility.GetPreferredHeight(_panelContent) + 36f;
+            float maxH = Root.rect.height - 16f;
+            var h = Mathf.Round(Mathf.Min(wanted, maxH));
+            if (Mathf.Abs(_panel.sizeDelta.y - h) > 0.5f) _panel.sizeDelta = new Vector2(_panel.sizeDelta.x, h);
             var net = Coop.Net;
             SetActive(_offline, net == null);
             SetActive(_online, net != null);

@@ -1,0 +1,2 @@
+# dist/ : publié tel quel (le launcher vérifie l'empreinte SHA-256 de chaque fichier) : aucune conversion de fin de ligne
+dist/** -text
