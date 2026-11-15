@@ -96,6 +96,8 @@ namespace DiceMultiplayer.Sync
             P(h, typeof(Enemy), "_Damage", nameof(EnemyDamagePostfix), postfix: true);
             // Mort en coop : K.O. (spectateur) puis retour à 1 PV, tant qu'un autre joueur est debout
             P(h, typeof(Player), nameof(Player.CanCompleteDeath), nameof(CanCompleteDeathPrefix));
+            // K.O. : le bouton « Tirer » (et ses variantes) ne répond plus
+            P(h, typeof(CustomButtonController), "OnPointerClickResponse", nameof(CustomButtonClickPrefix));
             // Phase ennemie retenue tant que les autres joueurs n'ont pas fini d'exécuter leurs dés
             P(h, typeof(BattleSystem), nameof(BattleSystem.ChangeState), nameof(BattleChangeStatePrefix));
             // Sorts d'ennemis sur le plateau (points faibles du boss scorpion) : l'hôte fait foi
@@ -212,7 +214,7 @@ namespace DiceMultiplayer.Sync
         private static void ClickPostfix() => Coop.EndLocalClick();
 
         // ───── Fin de tour ─────
-        private static bool FinishTurnPrefix() => Coop.OnLocalFinishTurn();
+        private static bool FinishTurnPrefix() => Knockout.AllowsFinishTurn() && Coop.OnLocalFinishTurn();
 
         private static bool NullTileGuard(VisualMapTile __0) => __0 != null;
 
@@ -352,7 +354,7 @@ namespace DiceMultiplayer.Sync
 
         private static bool GhostDiceInputPrefix(GameObjectDice __instance)
         {
-            try { return !(Coop.Active && Board.IsGhostDice(__instance)); } catch { return true; }
+            try { return !(Coop.Active && (Board.IsGhostDice(__instance) || (Knockout.LocalKO && Game.InBattle))); } catch { return true; }
         }
 
         private static bool GhostSelectPrefix(GameObjectDice __0)
@@ -386,6 +388,12 @@ namespace DiceMultiplayer.Sync
         {
             try { Combat.OnEnemyDamaged(__instance, __0); }
             catch (Exception e) { MultiplayerMod.Instance.Logger.LogWarning("EnemyDamagePostfix : " + e.Message); }
+        }
+
+        private static bool CustomButtonClickPrefix(CustomButtonController __instance)
+        {
+            try { return !(Knockout.LocalKO && Game.InBattle && __instance.TryCast<RerollButtonController>() != null && Knockout.Refuse()); }
+            catch { return true; }
         }
 
         private static bool CanCompleteDeathPrefix(Player __instance, ref bool __result)

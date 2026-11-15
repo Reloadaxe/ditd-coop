@@ -25,6 +25,7 @@ namespace DiceMultiplayer.Sync
             public GameObject Go;
             public Animator Anim;
             public int LastState, WantedState;
+            public bool GreyShown;
             public RectTransform HealthAnchor;
             public float WantedTime;
             public Vector3 Offset;
@@ -75,6 +76,7 @@ namespace DiceMultiplayer.Sync
         }
 
         private static int _lastLocalAnim;
+        private static bool _localGrey;
 
         /// <summary>Animation du héros d'un autre joueur : sa copie chez moi la jouera (même contrôleur d'animation).</summary>
         public static void OnRemoteAnim(Msg m)
@@ -105,7 +107,8 @@ namespace DiceMultiplayer.Sync
 
             var local = Game.Player;
             if (!InScene(local)) { DespawnAll(); return; }
-            if (_local == null || _local.Pointer != local.Pointer) { DespawnAll(); _local = local; }
+            if (_local == null || _local.Pointer != local.Pointer) { DespawnAll(); _local = local; _localGrey = false; }
+            if (_localGrey != Knockout.LocalKO) { Knockout.SetGrey(local.gameObject, Knockout.LocalKO); _localGrey = Knockout.LocalKO; }
 
             // Animation de MON héros → réseau : chaque copie distante joue l'animation de son propre joueur
             // (avant, elle rejouait la mienne : quand j'attaquais seul, la copie de l'autre attaquait aussi chez moi)
@@ -123,7 +126,9 @@ namespace DiceMultiplayer.Sync
             {
                 if (r.Go == null) continue;
                 r.Go.transform.position = local.transform.position + r.Offset;
-                if (r.Go.activeSelf == r.KO) r.Go.SetActive(!r.KO);
+                // K.O. : la copie reste visible, grisée
+                if (!r.Go.activeSelf) r.Go.SetActive(true);
+                if (r.GreyShown != r.KO) { Knockout.SetGrey(r.Go, r.KO); r.GreyShown = r.KO; }
                 if (r.Anim != null && r.WantedState != 0 && r.WantedState != r.LastState)
                 {
                     r.LastState = r.WantedState;

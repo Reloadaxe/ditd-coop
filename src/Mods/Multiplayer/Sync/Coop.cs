@@ -234,6 +234,7 @@ namespace DiceMultiplayer.Sync
                 var hc = instance.TryCast<Component>();
                 if (hc != null && Ui.GameUi.Owns(hc)) return true;
                 if (data != null && Ui.Hud.BlocksPointer(data.position)) return false;
+                if (hc != null && Knockout.BlocksClick(hc)) return false;   // K.O. : spectateur
             }
             catch { }
             if (!Active || Replaying) return true;
