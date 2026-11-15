@@ -193,6 +193,15 @@ namespace DiceMultiplayer.Sync
 
         private static void OnRemotePlaceInner(Msg m)
         {
+            // Même dé, même case, même face : simple renvoi (apparence de plateau). La copie réelle est déjà là et a le
+            // rendu du jeu : on ne la repose pas (sinon l'animation de pose se joue deux fois).
+            var same = _ghosts.FirstOrDefault(g => g.PlayerId == m.id && g.Uid == m.uid && !g.Stale && g.X == m.sx && g.Y == m.sy
+                                                   && g.Data == m.path && g.Face == (int)m.h && g.Extra == m.comp);
+            if (same != null && (same.Real != null || same.Go == null || same.Vis == m.vis))
+            {
+                same.Vis = m.vis; same.Name = m.text; same.Value = m.btn;
+                return;
+            }
             foreach (var old in _ghosts.Where(g => g.PlayerId == m.id && g.Uid == m.uid)) Destroy(old);
             _ghosts.RemoveAll(g => g.PlayerId == m.id && g.Uid == m.uid);
             _ghosts.Add(new Ghost { PlayerId = m.id, Uid = m.uid, X = m.sx, Y = m.sy, Name = m.text, Value = m.btn, Vis = m.vis, Data = m.path, Face = (int)m.h, Extra = m.comp });
