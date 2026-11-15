@@ -104,6 +104,27 @@ namespace DitdLauncher
 
         private static string Resolve(string url) => url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? url : (_resolvedBase ?? DistBase) + url;
 
+        /// <summary>
+        /// Remplace dest par tmp. Un fichier en cours d'utilisation (ex. CoopLink.exe lancé) ne peut pas être supprimé,
+        /// mais Windows permet de le renommer : on le met de côté en « .old » (supprimé à la prochaine mise à jour) et le
+        /// nouveau fichier prend sa place ; le programme en cours continue, la nouvelle version sert au prochain lancement.
+        /// </summary>
+        private static void ReplaceFile(string tmp, string dest)
+        {
+            var old = dest + ".old";
+            try { if (File.Exists(old)) File.Delete(old); } catch { }
+            if (File.Exists(dest))
+            {
+                try { File.Delete(dest); }
+                catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+                {
+                    try { File.Move(dest, old); }
+                    catch { File.Delete(tmp); throw new IOException($"{Path.GetFileName(dest)} est utilisé par un autre programme : ferme-le puis réessaie."); }
+                }
+            }
+            File.Move(tmp, dest);
+        }
+
         public static string Sha256Of(string file)
         {
             if (!File.Exists(file)) return null;
@@ -162,8 +183,7 @@ namespace DitdLauncher
                     File.Delete(tmp);
                     throw new InvalidDataException($"Empreinte invalide pour {f.Path} (attendu {f.Sha256}, reçu {got}). Réessaie dans quelques minutes : GitHub met peut-être encore le fichier en cache.");
                 }
-                if (File.Exists(dest)) File.Delete(dest);
-                File.Move(tmp, dest);
+                ReplaceFile(tmp, dest);
             }
 
             // 3) Optionnels décochés et fichiers obsolètes : suppression

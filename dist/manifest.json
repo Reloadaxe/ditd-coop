@@ -1,12 +1,12 @@
 {
-    "version":  "0.15.2",
-    "changelog":  "Panneau multijoueur : hauteur limitée à l\u0027écran, contenu qui défile ; correction de l\u0027empreinte de DiceLoader.xml",
+    "version":  "0.15.3",
+    "changelog":  "Launcher 1.0.5 : mise à jour possible même si CoopLink est lancé",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
-                     "version":  "1.0.4",
-                     "sha256":  "082b5d62ba7f4b25e68eaf1cc2f5f031f8522deb4a3bf80abc44a047e0e842bd",
-                     "size":  47104
+                     "version":  "1.0.5",
+                     "sha256":  "acc5e908a44bd6abd60bf43569444e2298eca2a8885c88ddf60098e352a72fce",
+                     "size":  47616
                  },
     "bepinex":  {
                     "version":  "6.0.0-be.793",
@@ -16,46 +16,46 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "88b96545072d9877a117344d96e14ce1dfa9d58dad89ece9acf3419d5874528a",
+                      "sha256":  "6145bf624df7e29519afbf5ae59607cb2e9412bcc6a9362366e5336ce2df6fc2",
                       "size":  50176,
-                      "version":  "0.15.2"
+                      "version":  "0.15.3"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.15.2"
+                      "version":  "0.15.3"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "7225041a78c2e042082c3d7da9c1b2a3019d5da8a661a9b0488842c428169c91",
+                      "sha256":  "d0dacde09f8e4ee9aec249c894c8fce89635d4893d99964047aafa32c9f944d4",
                       "size":  10752,
-                      "version":  "0.15.2",
+                      "version":  "0.15.3",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "fa5f778b9d375d4a8314e24f93eb692f7162e96fe016c9b2a2e774963bf40082",
+                      "sha256":  "9b303f986eefa11e0e270925373309acb774333384513164d9899c149a503608",
                       "size":  8704,
-                      "version":  "0.15.2",
+                      "version":  "0.15.3",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "7c797261d7ee0ef33a34d76e9bfc3e962d936fe2423a73f381ec5673b9ee4630",
+                      "sha256":  "4d5eccddbf2cbdc3f61506e657a88bd04fc22c9309cfd7dbb17216f93c91fb61",
                       "size":  221184,
-                      "version":  "0.15.2"
+                      "version":  "0.15.3"
                   },
                   {
                       "path":  "CoopLink/CoopLink.exe",
                       "url":  "files/CoopLink.exe",
                       "sha256":  "e02488db53dc766166f57407c01494c4ceb5a7e1f7ba7f3f5ed7d9cab5c3039b",
                       "size":  68608,
-                      "version":  "0.15.2"
+                      "version":  "0.15.3"
                   }
               ],
     "remove":  [
