@@ -30,7 +30,7 @@ namespace DiceMultiplayer.Ui
         // Panneau coop
         private static RectTransform _panel, _offline, _online, _playersRows;
         private static TMP_InputField _fName, _fPort, _fHost, _fChat;
-        private static Text _status, _log;
+        private static Text _status;   // (journal retiré du panneau : il cachait le reste ; il reste dans le fichier de log)
         private static Btn _cursorsBtn, _difficultyBtn;
         private static readonly float[] DifficultySteps = { 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f };
 
@@ -157,8 +157,6 @@ namespace DiceMultiplayer.Ui
             // Commun
             var r8 = Row(win);
             _cursorsBtn = Button(r8, "", () => M.ShowCursors = !M.ShowCursors, 120, 16);
-            Section(win, "Journal");
-            _log = Label(win, "", 7, Muted);
             _panel.gameObject.SetActive(false);
         }
 
@@ -300,7 +298,6 @@ namespace DiceMultiplayer.Ui
                 _difficultyBtn.Active = host;
                 if (host) _difficultyBtn.Label.Value = $"PV des ennemis : x{Scaling.FactorFor(Math.Max(2, net.Players.Count), M.HpPerExtraPlayer):0.##}";
             }
-            _log.Value = string.Join("\n", Coop.Log.Skip(Math.Max(0, Coop.Log.Count - 8)));
         }
 
         private static void Clear(Transform t)

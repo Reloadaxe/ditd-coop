@@ -1,6 +1,6 @@
 {
-    "version":  "0.13.0",
-    "changelog":  "Gestion des départs : l\u0027hôte qui quitte termine la partie pour tous ; un joueur qui quitte est retiré proprement",
+    "version":  "0.13.1",
+    "changelog":  "Panneau F2 : journal retiré (il cachait le reste)",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,39 +16,39 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "a9850959c95a7aa97bfca705af0e4400d8bb0a68865f20ac91bc8e6dea20e75e",
+                      "sha256":  "032dd22bc531337624aad623a72207e2bbbc1786c85726ce1a168fd37143c857",
                       "size":  50176,
-                      "version":  "0.13.0"
+                      "version":  "0.13.1"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.13.0"
+                      "version":  "0.13.1"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "f77fd192eec1f4fee38dbe0361dd930b1e0b70ee9e63d7c0f680c92360b1738e",
+                      "sha256":  "4fb6311e5fe83f0d9ea6b63f03a7c1dec4178658b2cdcf30bfbc16eb5548f566",
                       "size":  10752,
-                      "version":  "0.13.0",
+                      "version":  "0.13.1",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "85dc63f71c547148b991c511d6c3559b2d7ac070bb62384cd6ad8e16cae0caad",
+                      "sha256":  "5299ab3e0a05a19533b053724961694221dfd88bea2f9f26d9769c1c1990e2c8",
                       "size":  8704,
-                      "version":  "0.13.0",
+                      "version":  "0.13.1",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "ac6adc20dac1d5eabf0bd2e66b4f20529e71731bd2cbc981408cb98d3883637d",
-                      "size":  187904,
-                      "version":  "0.13.0"
+                      "sha256":  "b7a88e629e013934011572d9c6a7cf4617b5aa10ef099b55fdf707adf6e7867b",
+                      "size":  187392,
+                      "version":  "0.13.1"
                   }
               ],
     "remove":  [
