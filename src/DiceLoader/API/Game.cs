@@ -42,7 +42,8 @@ namespace DiceLoader
         public static bool InRun => Run != null && State > GameManager.GameState.TitleScreen;
         public static bool InBattle => State == GameManager.GameState.BattleFloor && Battle != null;
         public static BattleSystem.TurnState TurnState => Safe(() => Battle != null ? Battle.CurrentTurnState : BattleSystem.TurnState.None);
-        public static int Turn => Safe(() => Battle != null ? Battle.CurrentTurnCount : 0);
+        // Champ lu directement : la propriété du jeu est un « ref int » (l'interop renvoie alors une adresse, pas le tour)
+        public static int Turn => Safe(() => Battle != null ? Battle.currentTurnCount : 0);
         /// <summary>Version du jeu, ex. "5.1.0".</summary>
         public static string Version => Safe(() => GameManager.CompleteUpdateNumber) ?? "?";
 

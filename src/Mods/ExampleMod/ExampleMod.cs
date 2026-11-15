@@ -62,7 +62,7 @@ namespace ExampleMod
         }
 
         public override void OnBattleEnd(BattleSystem battle, BattleSystem.EndState result)
-            => Logger.LogInfo($"Combat terminé : {result} en {battle.CurrentTurnCount} tour(s)");
+            => Logger.LogInfo($"Combat terminé : {result} en {battle.currentTurnCount} tour(s)");
 
         public override void OnSettingsGUI()
         {

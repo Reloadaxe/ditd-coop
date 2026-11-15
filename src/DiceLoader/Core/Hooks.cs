@@ -77,7 +77,7 @@ namespace DiceLoader
         {
             DiceEvents.RaiseTurnStateChanged(__instance, __0);
             if (__0 == BattleSystem.TurnState.Intro) DiceEvents.RaiseBattleStart(__instance);
-            else if (__0 == BattleSystem.TurnState.StartTurn) DiceEvents.RaiseTurnStart(__instance, Game.Safe(() => __instance.CurrentTurnCount));
+            else if (__0 == BattleSystem.TurnState.StartTurn) DiceEvents.RaiseTurnStart(__instance, Game.Safe(() => __instance.currentTurnCount));
         }
 
         private static void Post_BattleEnd(BattleSystem __instance, BattleSystem.EndState __0) => DiceEvents.RaiseBattleEnd(__instance, __0);

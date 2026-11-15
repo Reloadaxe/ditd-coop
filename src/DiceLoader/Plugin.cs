@@ -15,7 +15,7 @@ namespace DiceLoader
     public class Plugin : BasePlugin
     {
         public const string Guid = "dicemodding.diceloader";
-        public const string Version = "1.0.1";
+        public const string Version = "1.0.2";
 
         internal static ConfigEntry<KeyCode> MenuKey;
         internal static ConfigEntry<bool> ShowWatermark;

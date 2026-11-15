@@ -39,6 +39,7 @@ namespace DiceMultiplayer.Sync
         private const char F = '\u001f';
         private static int _ghostUid = -100000;
         private static float _nextFix;
+        private static GameObject _removedHolder;   // copies retirées (désactivées, détruites avec la scène)
         public static bool PlacingGhost { get; private set; }
 
         public static void Reset()
@@ -318,7 +319,11 @@ namespace DiceMultiplayer.Sync
                 if (hand != null) { try { hand.RemoveDice(dice); } catch { } PurgeHand(hand, dice.Pointer); }
                 if (dm != null && ad != null) Purge(dm, ad);
                 dice.gameObject.SetActive(false);
-                UnityEngine.Object.Destroy(dice.gameObject);
+                // Pas de Destroy : le dé reste abonné aux mises à jour de valeur de sa case, et un dé détruit y provoquait des
+                // NullReferenceException (ExtraValueUI.RefreshValue). Comme le jeu, on le désactive ; il part avec la scène.
+                dice.name = "DIM_GhostRemoved";
+                if (_removedHolder == null) { _removedHolder = new GameObject("DIM_RemovedGhosts"); _removedHolder.SetActive(false); }
+                dice.transform.SetParent(_removedHolder.transform, false);
             }
             catch (Exception e) { MultiplayerMod.Instance.Logger.LogDebug("Retrait dé distant : " + e.Message); }
             if (dm != null && dm.CurrentEnergy != energy) dm.CurrentEnergy = energy;
