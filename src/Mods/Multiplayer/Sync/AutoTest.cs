@@ -77,6 +77,7 @@ namespace DiceMultiplayer.Sync
             if (now < _actAt || now < _nextAct) return;
             _nextAct = now + 1f;
 
+            if (Role == "join" && Board.HasDrags && _remoteShots < 2) { _remoteShots++; Shot("dragremote"); }
             try { Act(map); } catch (Exception e) { Log("erreur : " + e.Message); }
         }
 
@@ -115,6 +116,18 @@ namespace DiceMultiplayer.Sync
                 var ts = Game.TurnState;
                 if (ts == BattleSystem.TurnState.SelectDice)
                 {
+                    // Test du dé tenu (hôte, premier combat) : un dé de la main est pris et gardé quelques secondes
+                    if (Role == "host" && _dragStep < 4)
+                    {
+                        var hand = UnityEngine.Object.FindObjectOfType<HandUI>();
+                        var dice = hand != null ? Game.Safe(() => hand.CurrentGameObjectDicesOnHand) : null;
+                        if (_dragStep == 0 && dice != null && dice.Length > 0) { hand.SelectDiceFromHand(dice[0], true); Log("dé pris en main (test)"); }
+                        FakeMouse = _dragStep < 3 ? new Vector2(Screen.width * (0.35f + 0.1f * _dragStep), Screen.height * 0.5f) : (Vector2?)null;
+                        if (_dragStep == 2) Shot("drag");
+                        if (_dragStep == 3 && dice != null && dice.Length > 0) { try { hand.UnselectDice(Game.Dice.SelectedDice); } catch { } Log("dé reposé (test)"); }
+                        _dragStep++;
+                        return;
+                    }
                     bool killed = false;
                     foreach (var e in Game.Enemies.ToList())
                         if (e != null && !e.IsDyingOrDead) { MEC.Timing.RunCoroutine(e._DamageForceKill()); killed = true; Log($"ennemi tué ({e.name})"); }
@@ -134,6 +147,9 @@ namespace DiceMultiplayer.Sync
         }
 
         private static float _nextFinish;
+        private static int _dragStep, _remoteShots;
+        /// <summary>Test : position de souris imposée (envoyée aux autres à la place de la vraie).</summary>
+        public static Vector2? FakeMouse;
 
         private static void SkipRewards()
         {

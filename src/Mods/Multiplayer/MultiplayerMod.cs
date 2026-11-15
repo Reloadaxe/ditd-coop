@@ -91,8 +91,8 @@ namespace DiceMultiplayer
                 Coop.Send(new Msg
                 {
                     t = T.Cursor,
-                    x = _mouse.x / Math.Max(1, Screen.width),
-                    y = _mouse.y / Math.Max(1, Screen.height),
+                    x = (AutoTest.FakeMouse ?? _mouse).x / Math.Max(1, Screen.width),
+                    y = (AutoTest.FakeMouse ?? _mouse).y / Math.Max(1, Screen.height),
                     scene = Game.State.ToString(),
                 });
             }

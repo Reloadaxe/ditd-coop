@@ -472,6 +472,7 @@ namespace DiceMultiplayer.Sync
         // mon curseur (déjà transmis 30 fois par seconde et lissé) jusqu'à ce que je le lâche ou le pose.
 
         private static int _heldKey;
+        private static float _nextDragLog;
         private static readonly Dictionary<int, GameObject> _drags = new Dictionary<int, GameObject>();
         private static readonly Dictionary<int, Vector2> _dragPos = new Dictionary<int, Vector2>();
 
@@ -500,18 +501,39 @@ namespace DiceMultiplayer.Sync
             foreach (var kv in _drags)
             {
                 var go = kv.Value;
-                if (go == null || !Coop.Cursors.TryGetValue(kv.Key, out var cur)) continue;
+                if (go == null) continue;
+                if (!Coop.Cursors.TryGetValue(kv.Key, out var cur))
+                {
+                    if (Time.unscaledTime >= _nextDragLog) { _nextDragLog = Time.unscaledTime + 2f; MultiplayerMod.Instance.Logger.LogDebug($"[drag] curseur de {Coop.NameOf(kv.Key)} inconnu"); }
+                    continue;
+                }
                 var target = new Vector2(cur.x * Screen.width, cur.y * Screen.height);
                 if (!_dragPos.TryGetValue(kv.Key, out var shown) || (shown - target).sqrMagnitude > 400f * 400f) shown = target;
                 shown = Vector2.Lerp(shown, target, 1f - Mathf.Exp(-18f * Time.unscaledDeltaTime));
                 _dragPos[kv.Key] = shown;
-                var rt = go.transform as RectTransform;
                 var parent = go.transform.parent as RectTransform;
+                // Caméra du canvas RACINE : un canvas imbriqué (plateau) ne porte pas toujours la caméra lui-même
                 var canvas = go.GetComponentInParent<Canvas>();
-                var cam = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.worldCamera : null;
-                if (parent != null && RectTransformUtility.ScreenPointToWorldPointInRectangle(parent, shown, cam, out var world))
-                    go.transform.position = world;
+                var root = canvas != null ? canvas.rootCanvas : null;
+                var cam = root != null && root.renderMode != RenderMode.ScreenSpaceOverlay
+                    ? (root.worldCamera != null ? root.worldCamera : Camera.main) : null;
+                // Point de l'écran → monde, à la profondeur actuelle du dé (le plateau est tourné : pas de projection sur son plan)
+                Vector3 world = default;
+                bool hit = false;
+                if (cam != null)
+                {
+                    var depth = cam.WorldToScreenPoint(go.transform.position).z;
+                    world = cam.ScreenToWorldPoint(new Vector3(shown.x, shown.y, depth));
+                    hit = true;
+                }
+                else if (parent != null) hit = RectTransformUtility.ScreenPointToWorldPointInRectangle(parent, shown, null, out world);
+                if (hit) go.transform.position = world;
                 go.transform.SetAsLastSibling();
+                if (Time.unscaledTime >= _nextDragLog)
+                {
+                    _nextDragLog = Time.unscaledTime + 2f;
+                    MultiplayerMod.Instance.Logger.LogDebug($"[drag] {Coop.NameOf(kv.Key)} : curseur {shown} → {(hit ? go.transform.position.ToString() : "conversion impossible")} (canvas {root?.name}, caméra {cam?.name})");
+                }
             }
         }
 
@@ -535,6 +557,7 @@ namespace DiceMultiplayer.Sync
         }
 
         public static void OnRemoteDragEnd(Msg m) => DestroyDrag(m.id);
+        public static bool HasDrags => _drags.Count > 0;
 
         private static void DestroyDrag(int playerId)
         {
