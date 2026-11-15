@@ -80,6 +80,7 @@ namespace DiceMultiplayer
             try { Combat.UpdateExecWait(); } catch (Exception e) { Logger.LogDebug("ExecWait : " + e.Message); }
             try { Spells.Update(); } catch { }
             try { Knockout.Update(); } catch { }
+            try { Patches.HideTutorialButton(); } catch { }
             try { Scaling.Update(); } catch { }
             try { Board.UpdateSlotValues(); } catch (Exception e) { Logger.LogDebug("SlotValues : " + e.Message); }
             try { Board.UpdateDrag(); } catch (Exception e) { Logger.LogDebug("Drag : " + e.Message); }

@@ -434,6 +434,16 @@ namespace DiceMultiplayer.Sync
 
         private static void NoTutorialPostfix(ref bool __result) { if (Coop.Active) __result = false; }
 
+        private static TutorialUI _tutorialUi;
+        /// <summary>Bouton « Tutorial » (en haut à gauche du combat) masqué en coop : les tutoriels y sont désactivés.</summary>
+        public static void HideTutorialButton()
+        {
+            if (!Coop.Active) return;
+            if (_tutorialUi == null) { _tutorialUi = UnityEngine.Object.FindObjectOfType<TutorialUI>(); if (_tutorialUi == null) return; }
+            var b = _tutorialUi.tutorialButton;
+            if (b != null && b.gameObject.activeSelf) b.gameObject.SetActive(false);
+        }
+
         private static bool LoadRunPrefix()
         {
             if (!Coop.Active) return true;
