@@ -76,10 +76,29 @@ namespace DiceMultiplayer.Sync
             var battle = Game.Battle;
             var values = Game.Safe(() => battle?.BattleValues);
             if (values == null) return res;
+            // Nombre que le jeu affiche réellement sur chaque flèche (sans les autres joueurs). Les valeurs du plateau
+            // (BattleValues) comptent encore un dé repris en main, alors que la flèche du jeu ne le compte plus : sans ce
+            // plafond, son bonus restait affiché chez les autres tant que je le tenais.
+            var shown = new Dictionary<IntPtr, int>();
+            foreach (var a in Arrows())
+                try
+                {
+                    if (!a.gameObject.activeInHierarchy || a.CurrentTargetEnemy == null) continue;
+                    shown[a.CurrentTargetEnemy.Pointer] = _arrowLocal.TryGetValue(a.Pointer, out var v) ? Math.Max(0, v) : 0;
+                }
+                catch { }
+            bool ghosts = Board.HasRealGhosts;
             foreach (var e in Game.Enemies)
             {
                 int idx = Game.Safe(() => battle.GetBattleIndexOfEntity(e));
                 int dmg = ArrowValue(values, e);
+                if (_system != null)
+                {
+                    // Pas de flèche sur cet ennemi : le jeu n'y prévoit rien. Sans copies des autres, la flèche = mes dés seuls ;
+                    // avec copies, elle peut compter en plus une part de leurs dégâts : on garde le plus petit des deux.
+                    int game = shown.TryGetValue(e.Pointer, out var s) ? s : 0;
+                    dmg = ghosts && dmg >= 0 ? Math.Min(dmg, game) : game;
+                }
                 if (dmg > 0) res[idx] = dmg;
             }
             return res;
@@ -151,7 +170,7 @@ namespace DiceMultiplayer.Sync
             try
             {
                 if (!Coop.Active || __instance == null) return true;
-                if (!_inRefresh) _arrowLocal[__instance.Pointer] = __0;
+                if (!_inRefresh) { _arrowLocal[__instance.Pointer] = __0; _kick = true; }
                 var enemy = __instance.CurrentTargetEnemy;
                 // Avec des copies de dés des autres sur mon plateau, le nombre du jeu peut déjà compter une partie de
                 // leurs dégâts (ex. dégâts de zone sur les cibles secondaires), qui sont aussi dans l'aperçu reçu :
@@ -180,7 +199,7 @@ namespace DiceMultiplayer.Sync
             try
             {
                 if (!Coop.Active || __instance == null) return true;
-                if (!_inRefresh) _arrowLocal[__instance.Pointer] = -1;
+                if (!_inRefresh) { _arrowLocal[__instance.Pointer] = -1; _kick = true; }
                 if (RemoteFor(__instance.CurrentTargetEnemy) > 0)
                 {
                     bool was = _inRefresh;
