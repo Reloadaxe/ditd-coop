@@ -769,6 +769,10 @@ namespace DiceMultiplayer.Sync
 
         public static IReadOnlyCollection<int> ReadyPlayers => _ready;
         private static bool _executingEndTurn;
+        public static bool ExecutingEndTurn => _executingEndTurn;
+
+        /// <summary>Joueur K.O. (spectateur) : il ne compte pas dans l'attente de fin de tour.</summary>
+        public static bool IsKO(int id) => id == LocalId ? Knockout.LocalKO : Heroes.IsRemoteKO(id);
 
         /// <summary>Préfixe de FinishTurnUI.OnClickFinishTurnButton : déclare « prêt ». Le tour ne finit que quand tout le monde l'est.</summary>
         public static bool OnLocalFinishTurn()
@@ -835,7 +839,7 @@ namespace DiceMultiplayer.Sync
         public static string ReadyStatus()
         {
             if (!Active || !Game.InBattle || _ready.Count == 0) return null;
-            var waiting = Net.Players.Where(p => !_ready.Contains(p.Id)).Select(p => $"<color={p.Color}>{p.Name}</color>").ToList();
+            var waiting = Net.Players.Where(p => !_ready.Contains(p.Id) && !IsKO(p.Id)).Select(p => $"<color={p.Color}>{p.Name}</color>").ToList();
             return _ready.Contains(LocalId)
                 ? (waiting.Count > 0 ? $"Tu es prêt : en attente de {string.Join(", ", waiting)}\n<color=#e9cfae>Clique à nouveau sur Fin de tour pour annuler</color>" : "Tout le monde est prêt !")
                 : $"{string.Join(", ", _ready.Select(id => $"<color={ColorOf(id)}>{NameOf(id)}</color>"))} {(_ready.Count > 1 ? "sont prêts" : "est prêt")} : à toi de finir ton tour";
@@ -845,11 +849,21 @@ namespace DiceMultiplayer.Sync
         {
             if (ready) _ready.Add(id); else _ready.Remove(id);
             AddLog($"{NameOf(id)} {(ready ? "est prêt" : "n'est plus prêt")} ({_ready.Count}/{Net.Players.Count})");
-            if (IsHost && Net.Players.All(p => _ready.Contains(p.Id)))
-            {
-                Send(new Msg { t = T.EndTurn, turn = turn });
-                ExecuteEndTurn();
-            }
+            HostCheckAllReady(turn);
+        }
+
+        /// <summary>
+        /// Hôte : fin de tour collective quand tous les joueurs debout sont prêts (les K.O. ne comptent pas).
+        /// Aussi vérifié en continu (un joueur peut tomber K.O. alors que les autres sont déjà prêts).
+        /// </summary>
+        public static void HostCheckAllReady(int turn = -1)
+        {
+            if (!Active || !IsHost || !Game.InBattle || _ready.Count == 0) return;
+            if (Game.TurnState != BattleSystem.TurnState.SelectDice && turn < 0) return;
+            if (!Net.Players.All(p => _ready.Contains(p.Id) || IsKO(p.Id))) return;
+            if (Net.Players.All(p => IsKO(p.Id))) return;   // toute l'équipe K.O. : la défaite s'en charge
+            Send(new Msg { t = T.EndTurn, turn = turn < 0 ? Game.Turn : turn });
+            ExecuteEndTurn();
         }
 
         private static void ExecuteEndTurn()

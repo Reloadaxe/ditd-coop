@@ -337,5 +337,6 @@ namespace DiceMultiplayer.Sync
         }
 
         public static bool AnyRemoteAlive => _remotes.Values.Any(r => !r.KO && Time.unscaledTime - r.LastUpdate < 10f);
+        public static bool IsRemoteKO(int id) => _remotes.TryGetValue(id, out var r) && r.KO;
     }
 }

@@ -68,7 +68,22 @@ namespace DiceMultiplayer.Sync
         }
 
         /// <summary>Bouton « Terminé » : seul le mod le valide pour un joueur K.O.</summary>
-        public static bool AllowsFinishTurn() => !(LocalKO && Game.InBattle && !_autoReadying && Refuse());
+        public static bool AllowsFinishTurn() =>
+            !(LocalKO && Game.InBattle && !_autoReadying && !Coop.ExecutingEndTurn && !Coop.Replaying && Refuse());
+
+        private static float _nextAuto;
+
+        /// <summary>Chaque frame : un joueur K.O. en phase de choix des dés se déclare prêt (filet de sécurité).</summary>
+        private static void KeepReady()
+        {
+            if (!LocalKO || !Game.InBattle || Time.unscaledTime < _nextAuto) return;
+            _nextAuto = Time.unscaledTime + 1.5f;
+            if (Game.TurnState != BattleSystem.TurnState.SelectDice || Coop.ReadyPlayers.Contains(Coop.LocalId)) return;
+            var ui = UnityEngine.Object.FindObjectOfType<FinishTurnUI>();
+            if (ui == null) return;
+            _autoReadying = true;
+            try { ui.OnClickFinishTurnButton(); } finally { _autoReadying = false; }
+        }
 
         /// <summary>
         /// Clic sur un élément du jeu en combat pendant un K.O. : bloqué, sauf les menus qui n'influent pas sur le combat
@@ -162,6 +177,8 @@ namespace DiceMultiplayer.Sync
         /// <summary>Chaque frame en combat : si tout le monde est K.O., la défaite est validée chez moi aussi.</summary>
         public static void Update()
         {
+            try { KeepReady(); } catch { }
+            try { Coop.HostCheckAllReady(); } catch { }
             if (!LocalKO || !Coop.Active || !Game.InBattle || Heroes.AnyRemoteAlive || _allowDeath) return;
             var p = Game.Player;
             if (p == null) return;
