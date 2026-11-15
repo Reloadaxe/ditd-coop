@@ -42,7 +42,7 @@ ditd-coop/
 │  │  ├─ API/UI.cs           ← helpers IMGUI compatibles IL2CPP
 │  │  └─ Core/               ← chargement des mods, hooks Harmony, menu F1
 │  └─ Mods/
-│     ├─ Multiplayer/        ← coop 2 ou 3 joueurs en TCP (voir son README)
+│     ├─ Multiplayer/        ← coop 2 joueurs en TCP (voir son README)
 │     ├─ ExampleMod/         ← exemple commenté (config, événements, patch Harmony)
 │     └─ DevTools/           ← panneau de triche et de debug
 ├─ install.ps1  build.ps1  new-mod.ps1

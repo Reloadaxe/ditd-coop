@@ -1,6 +1,6 @@
 # Multijoueur Coop (v0.4, expérimental)
 
-Coop à 2 ou 3 joueurs en TCP direct. **Chaque joueur joue sa propre run** : son personnage, son deck, sa main, son énergie, ses PV, ses reliques, son or et ses récompenses.
+Coop à 2 joueurs en TCP direct. **Chaque joueur joue sa propre run** : son personnage, son deck, sa main, son énergie, ses PV, ses reliques, son or et ses récompenses.
 Les runs avancent ensemble et ne partagent que la carte, les ennemis, le plateau et le rythme des tours.
 
 ## Jouer
