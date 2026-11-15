@@ -1,6 +1,6 @@
 {
-    "version":  "0.16.1",
-    "changelog":  "Dé tenu par un autre joueur : suit vraiment son curseur",
+    "version":  "0.16.2",
+    "changelog":  "Dé repris sur le plateau : la case se libère chez les autres ; nom des joueurs remonté sous les pieds",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,46 +16,46 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "00678b12d7b3af6f85c7952828eba5e67b35cf05d4a42e990c2e163984039ef0",
+                      "sha256":  "935dea0e0c189ad9b1fbf3353e1d12b41bc6c0ab606c9f396bdd6451a828b598",
                       "size":  50176,
-                      "version":  "0.16.1"
+                      "version":  "0.16.2"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.16.1"
+                      "version":  "0.16.2"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "857fb74bffeddbc0c5938e49779b7769bcea417bf9186187ac6edbb10c073f7a",
+                      "sha256":  "cfe8b228a93fec1d762974083bae740e57ab51941a629dde89436c6c2f5814d2",
                       "size":  10752,
-                      "version":  "0.16.1",
+                      "version":  "0.16.2",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "74d0bbe6ed93268096ffe58d7bdbcee164f26a7070b8dfa8bb498d5903153b94",
+                      "sha256":  "d76f79d81c436f7854db551bfe24bc848c182c166140aa9d8781c24cc08642e4",
                       "size":  8704,
-                      "version":  "0.16.1",
+                      "version":  "0.16.2",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "4c6405dd062ce9e698388c9a6aeaf9357aae6c673e7c6542326c6dd4a8887e2a",
-                      "size":  226304,
-                      "version":  "0.16.1"
+                      "sha256":  "1b6ba8b97b823fcd23e6901f33a95218074b3a6971bf74a5089214a85b35509e",
+                      "size":  227328,
+                      "version":  "0.16.2"
                   },
                   {
                       "path":  "CoopLink/CoopLink.exe",
                       "url":  "files/CoopLink.exe",
                       "sha256":  "e02488db53dc766166f57407c01494c4ceb5a7e1f7ba7f3f5ed7d9cab5c3039b",
                       "size":  68608,
-                      "version":  "0.16.1"
+                      "version":  "0.16.2"
                   }
               ],
     "remove":  [

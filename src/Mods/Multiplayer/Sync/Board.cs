@@ -472,6 +472,7 @@ namespace DiceMultiplayer.Sync
         // mon curseur (déjà transmis 30 fois par seconde et lissé) jusqu'à ce que je le lâche ou le pose.
 
         private static int _heldKey;
+        private static GameObjectDice _heldDice;
         private static float _nextDragLog;
         private static readonly Dictionary<int, GameObject> _drags = new Dictionary<int, GameObject>();
         private static readonly Dictionary<int, Vector2> _dragPos = new Dictionary<int, Vector2>();
@@ -490,7 +491,14 @@ namespace DiceMultiplayer.Sync
             int key = held != null ? Key(held) : 0;
             if (key != _heldKey)
             {
-                if (_heldKey != 0) Coop.Send(new Msg { t = T.DragEnd, uid = _heldKey });
+                if (_heldKey != 0)
+                {
+                    Coop.Send(new Msg { t = T.DragEnd, uid = _heldKey });
+                    // Dé lâché sur le plateau (même case, sans nouvelle pose du jeu) : on le renvoie pour qu'il réapparaisse chez les autres
+                    var prev = _heldDice;
+                    Game.Schedule(() => ResendIfOnBoard(prev), 0.4f);
+                }
+                _heldDice = held;
                 _heldKey = key;
                 if (held != null) Coop.Send(new Msg { t = T.DragStart, uid = key, vis = Game.Safe(() => Snapshot(held)) });
             }
@@ -537,9 +545,30 @@ namespace DiceMultiplayer.Sync
             }
         }
 
+        /// <summary>Si ce dé est (de nouveau) dans une case de mon plateau, sa pose est renvoyée aux autres.</summary>
+        private static void ResendIfOnBoard(GameObjectDice dice)
+        {
+            if (dice == null || !Coop.Active || !Game.InBattle) return;
+            foreach (var s in UnityEngine.Object.FindObjectsOfType<BoardSlot>())
+            {
+                try
+                {
+                    if (!s.gameObject.activeInHierarchy || !s.HasPlacedDice) continue;
+                    if (!s.TryGetPlacedDice(out var d) || d == null || d.Pointer != dice.Pointer) continue;
+                    var c = s.CurrentCoord;
+                    SendPlace(dice, c.x, c.y);
+                    return;
+                }
+                catch { }
+            }
+        }
+
         public static void OnRemoteDragStart(Msg m)
         {
             DestroyDrag(m.id);
+            // Dé repris depuis le plateau : sa copie quitte la case (elle redevient libre), comme chez son propriétaire
+            foreach (var g in _ghosts.Where(g => g.PlayerId == m.id && g.Uid == m.uid).ToList()) Destroy(g);
+            _ghosts.RemoveAll(g => g.PlayerId == m.id && g.Uid == m.uid);
             if (!Game.InBattle || string.IsNullOrEmpty(m.vis)) return;
             var slot = UnityEngine.Object.FindObjectsOfType<BoardSlot>().FirstOrDefault(s => s.gameObject.activeInHierarchy);
             if (slot == null) return;

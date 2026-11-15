@@ -357,7 +357,8 @@ namespace DiceMultiplayer.Sync
                 if (sr == null || !sr.enabled || sr.sprite == null) continue;
                 if (b == null) b = sr.bounds; else { var bb = b.Value; bb.Encapsulate(sr.bounds); b = bb; }
             }
-            var world = b != null ? new Vector3(b.Value.center.x, b.Value.min.y, t.position.z) : t.position;
+            // Pieds du personnage (position de son objet) : le bas des sprites inclut ombre et marges transparentes
+            var world = new Vector3(b != null ? b.Value.center.x : t.position.x, t.position.y, t.position.z);
             var s = cam.WorldToScreenPoint(world);
             return s.z < 0 ? (Vector2?)null : new Vector2(s.x, s.y);
         }
