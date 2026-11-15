@@ -86,7 +86,7 @@ namespace DiceMultiplayer
 
             if (Coop.Active && Time.unscaledTime >= _nextCursor)
             {
-                _nextCursor = Time.unscaledTime + 1f / 15f;
+                _nextCursor = Time.unscaledTime + 1f / 30f;   // 30 positions par seconde (lissées à l'affichage)
                 Coop.Send(new Msg
                 {
                     t = T.Cursor,

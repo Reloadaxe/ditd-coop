@@ -58,6 +58,7 @@ namespace DiceMultiplayer.Ui
         private static readonly List<Text> _heroPool = new List<Text>();
         private static readonly List<(RectTransform box, Text text)> _previewPool = new List<(RectTransform, Text)>();
         private static readonly List<(RectTransform root, Image arrow, Text name)> _cursorPool = new List<(RectTransform, Image, Text)>();
+        private static readonly Dictionary<int, Vector2> _cursorPos = new Dictionary<int, Vector2>();
 
         public static void Update()
         {
@@ -606,7 +607,12 @@ namespace DiceMultiplayer.Ui
                 var col = Hex(Coop.ColorOf(list[i].id));
                 a.color = Color.Lerp(Color.white, col, 0.6f);
                 n.Value = $"<color={Coop.ColorOf(list[i].id)}>{Coop.NameOf(list[i].id)}</color>";
-                AtScreen(r, list[i].screen, Vector2.zero);
+                // Déplacement lissé vers la dernière position reçue (sinon le curseur saute à chaque message)
+                var key = list[i].id;
+                if (!_cursorPos.TryGetValue(key, out var shown) || (shown - list[i].screen).sqrMagnitude > 400f * 400f) shown = list[i].screen;
+                shown = Vector2.Lerp(shown, list[i].screen, 1f - Mathf.Exp(-18f * Time.unscaledDeltaTime));
+                _cursorPos[key] = shown;
+                AtScreen(r, shown, Vector2.zero);
                 r.SetAsLastSibling();
             }
             for (int i = list.Count; i < _cursorPool.Count; i++) SetActive(_cursorPool[i].root, false);

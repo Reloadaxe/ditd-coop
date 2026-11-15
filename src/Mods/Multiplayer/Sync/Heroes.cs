@@ -155,7 +155,20 @@ namespace DiceMultiplayer.Sync
                         var s = r.HpWithMax ? $"{r.Hp}/{r.MaxHp}" : r.Hp.ToString();
                         if (s != r.ShownHp || (r.HpTexts.Count > 0 && r.HpTexts[0].text != s)) { SetAll(r.HpTexts, s); r.ShownHp = s; }
                     }
-                    if (r.BlockParent != null && r.BlockParent.activeSelf != (r.Block > 0)) r.BlockParent.SetActive(r.Block > 0);
+                    // Bouclier : le jeu le fait apparaître en agrandissant son conteneur (taille 0 → 1) ; sur la copie, sans le
+                    // script du jeu, on reproduit cette animation
+                    if (r.BlockParent != null)
+                    {
+                        if (!r.BlockParent.activeSelf) r.BlockParent.SetActive(true);
+                        var tr = r.BlockParent.transform;
+                        float target = r.Block > 0 ? 1f : 0f;
+                        float cur = tr.localScale.x;
+                        if (Mathf.Abs(cur - target) > 0.001f)
+                        {
+                            float v = Mathf.MoveTowards(cur, target, Time.deltaTime * 6f);
+                            tr.localScale = new Vector3(v, v, 1f);
+                        }
+                    }
                     if (r.BlockText != null)
                     {
                         var b = r.Block.ToString();
