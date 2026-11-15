@@ -1,6 +1,6 @@
 {
-    "version":  "0.15.0",
-    "changelog":  "CoopLink : réseaux d\u0027amis sécurisés sans serveur, intégrés au panneau multijoueur",
+    "version":  "0.15.1",
+    "changelog":  "CoopLink 1.0.1 : box trouvée même avec une carte réseau virtuelle (VirtualBox, VPN) ; nouvel essai automatique",
     "launcher":  {
                      "path":  "DitdCoopLauncher.exe",
                      "url":  "DitdCoopLauncher.exe",
@@ -16,46 +16,46 @@
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.dll",
                       "url":  "files/DiceLoader.dll",
-                      "sha256":  "31472785f6a32b6e9faaa1b1e8496013b4729834a9c57713083ba81435ce110e",
+                      "sha256":  "4a07bd1281c32cab33a32e91f5481188e04910082ad141c1dee81e8ef674940f",
                       "size":  50176,
-                      "version":  "0.15.0"
+                      "version":  "0.15.1"
                   },
                   {
                       "path":  "BepInEx/plugins/DiceLoader/DiceLoader.xml",
                       "url":  "files/DiceLoader.xml",
                       "sha256":  "e71376e1e7469f117b8ced678296b4428f4bb3179700c0cb81f73027ea15be5c",
                       "size":  13883,
-                      "version":  "0.15.0"
+                      "version":  "0.15.1"
                   },
                   {
                       "path":  "Mods/DevTools/DevTools.dll",
                       "url":  "files/DevTools.dll",
-                      "sha256":  "1855af82a81e9300cb6468b05282fe31d7b9275254d9c352ecea8a3482a77ad1",
+                      "sha256":  "173f94e5e27d5b3c8dc050e7e7373b3eed3c97ae1b3da03e57f67d84e96b3767",
                       "size":  10752,
-                      "version":  "0.15.0",
+                      "version":  "0.15.1",
                       "optional":  "DevTools (triches)"
                   },
                   {
                       "path":  "Mods/ExampleMod/ExampleMod.dll",
                       "url":  "files/ExampleMod.dll",
-                      "sha256":  "6192a6d3ee2f4fd8ee14e8b448463a5d41a0555c6f7448c8c01b230f1a0301dc",
+                      "sha256":  "2dfcb6a84edacffd9050a879c2cc85cacc412c92f5184e976aab9a5446a6084e",
                       "size":  8704,
-                      "version":  "0.15.0",
+                      "version":  "0.15.1",
                       "optional":  "ExampleMod (exemple)"
                   },
                   {
                       "path":  "Mods/Multiplayer/Multiplayer.dll",
                       "url":  "files/Multiplayer.dll",
-                      "sha256":  "f176e1418aaaa5f2cf21410a287b5f67fc5d71fff09bebc698b08ec6dec075f2",
-                      "size":  218624,
-                      "version":  "0.15.0"
+                      "sha256":  "d6f7be5369e738f2d9188642a2ad199d1dc3d8a26e31bcfdca29ea18afd2b7c3",
+                      "size":  220160,
+                      "version":  "0.15.1"
                   },
                   {
                       "path":  "CoopLink/CoopLink.exe",
                       "url":  "files/CoopLink.exe",
-                      "sha256":  "5cf0f438dbd8de4194713c14ca3dde7c235b382fc47d25f6b91467b5d1b04219",
-                      "size":  66560,
-                      "version":  "0.15.0"
+                      "sha256":  "de4243c5139d2beb952d8a632e31eb1efd376d5a7a8c37d20ad0826cca1c8574",
+                      "size":  68608,
+                      "version":  "0.15.1"
                   }
               ],
     "remove":  [

@@ -86,6 +86,10 @@ namespace DiceMultiplayer.Net
 
         // ───── SSDP ─────
 
+        /// <summary>
+        /// Recherche de la box : M-SEARCH envoyé depuis CHAQUE carte réseau (une carte virtuelle — VirtualBox, VPN… — peut
+        /// sinon capter le multicast et la box ne répond jamais), et aussi directement à chaque passerelle.
+        /// </summary>
         private static List<string> Discover(TimeSpan timeout)
         {
             var found = new List<string>();
@@ -96,27 +100,64 @@ namespace DiceMultiplayer.Net
                 "urn:schemas-upnp-org:service:WANIPConnection:1",
                 "urn:schemas-upnp-org:service:WANPPPConnection:1",
             };
-            using var udp = new UdpClient(AddressFamily.InterNetwork);
-            udp.Client.ReceiveTimeout = 500;
-            var ep = new IPEndPoint(IPAddress.Parse("239.255.255.250"), 1900);
-            foreach (var st in targets)
+            var locals = new List<IPAddress>();
+            var gateways = new List<IPAddress>();
+            try
             {
-                var req = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: " + st + "\r\n\r\n";
-                var data = Encoding.ASCII.GetBytes(req);
-                udp.Send(data, data.Length, ep);
-            }
-            var end = DateTime.UtcNow + timeout;
-            while (DateTime.UtcNow < end)
-            {
-                try
+                foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
                 {
-                    IPEndPoint from = null;
-                    var resp = Encoding.ASCII.GetString(udp.Receive(ref from));
-                    var m = Regex.Match(resp, @"^LOCATION:\s*(\S+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
-                    if (m.Success && !found.Contains(m.Groups[1].Value)) found.Add(m.Groups[1].Value);
+                    if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+                    var props = ni.GetIPProperties();
+                    foreach (var ua in props.UnicastAddresses)
+                        if (ua.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ua.Address)
+                            && !ua.Address.ToString().StartsWith("169.254.")) locals.Add(ua.Address);
+                    foreach (var g in props.GatewayAddresses)
+                        if (g.Address.AddressFamily == AddressFamily.InterNetwork && !g.Address.Equals(IPAddress.Any)) gateways.Add(g.Address);
                 }
-                catch (SocketException) { }
             }
+            catch { }
+            if (locals.Count == 0) locals.Add(IPAddress.Any);
+
+            var sockets = new List<UdpClient>();
+            try
+            {
+                var multicast = new IPEndPoint(IPAddress.Parse("239.255.255.250"), 1900);
+                foreach (var ip in locals)
+                {
+                    UdpClient u;
+                    try { u = new UdpClient(new IPEndPoint(ip, 0)); } catch { continue; }
+                    sockets.Add(u);
+                    foreach (var st in targets)
+                    {
+                        var req = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: " + st + "\r\n\r\n";
+                        var data = Encoding.ASCII.GetBytes(req);
+                        try { u.Send(data, data.Length, multicast); } catch { }
+                        foreach (var gw in gateways)
+                            try { u.Send(data, data.Length, new IPEndPoint(gw, 1900)); } catch { }
+                    }
+                }
+                var end = DateTime.UtcNow + timeout;
+                while (DateTime.UtcNow < end)
+                {
+                    bool any = false;
+                    foreach (var u in sockets)
+                    {
+                        try
+                        {
+                            if (u.Available <= 0) continue;
+                            any = true;
+                            IPEndPoint from = null;
+                            var resp = Encoding.ASCII.GetString(u.Receive(ref from));
+                            var m = Regex.Match(resp, @"^LOCATION:\s*(\S+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+                            if (m.Success && !found.Contains(m.Groups[1].Value)) found.Add(m.Groups[1].Value);
+                        }
+                        catch { }
+                    }
+                    if (!any) Thread.Sleep(50);
+                    if (found.Count > 0 && DateTime.UtcNow > end - TimeSpan.FromMilliseconds(timeout.TotalMilliseconds * 0.6)) break;
+                }
+            }
+            finally { foreach (var u in sockets) try { u.Close(); } catch { } }
             return found;
         }
 
